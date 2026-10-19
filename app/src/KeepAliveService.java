@@ -58,7 +58,7 @@ public class KeepAliveService extends Service {
         // que molestar con sonido ni vibración.
         if (nm.getNotificationChannel(CHANNEL_ID) != null) return;
         NotificationChannel ch = new NotificationChannel(
-                CHANNEL_ID, "CostPhone activo", NotificationManager.IMPORTANCE_LOW);
+                CHANNEL_ID, "Control remoto de CostPhone", NotificationManager.IMPORTANCE_LOW);
         ch.setDescription("Mantiene el control remoto de CostPhone disponible.");
         ch.setShowBadge(false);
         ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
@@ -78,12 +78,13 @@ public class KeepAliveService extends Service {
         } else {
             b = new Notification.Builder(this);
         }
-        b.setContentTitle("CostPhone activo")
-         .setContentText("El control remoto sigue disponible para Termux.")
-         .setSmallIcon(R.drawable.ic_notification)
+        b.setContentTitle("CostPhone")
+         .setContentText("Control remoto activo para Termux")
+         .setSmallIcon(R.drawable.ic_stat_costphone)
          .setContentIntent(openPi)
-         .setOngoing(true)                       // no se puede deslizar
+         .setOngoing(true)
          .setCategory(Notification.CATEGORY_SERVICE)
+         .setColor(0xFF1FBF8F)
          .setVisibility(Notification.VISIBILITY_PUBLIC)
          .setShowWhen(false);
         if (Build.VERSION.SDK_INT < 26) {
