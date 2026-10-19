@@ -464,27 +464,28 @@ public class SettingsActivity extends Activity {
     private LinearLayout buildControlPanel() {
         LinearLayout panel = createPanel();
 
-        panel.addView(sectionTitle("Gestos"));
+        // ── Gestos ──
+        LinearLayout gesturesCard = sectionCard("Gestos", R.drawable.ic_control);
 
         final EditText etX = new EditText(this);
         etX.setTextColor(TEXT_MAIN);
         etX.setHintTextColor(TEXT_MUTED);
         etX.setHint("X (píxeles)");
         etX.setPadding(dp(14), dp(12), dp(14), dp(12));
-        etX.setBackground(rounded(BG_INPUT, 10, 0));
+        etX.setBackground(rounded(BG_INPUT, 10, DIVIDER));
         etX.setSingleLine();
         etX.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        panel.addView(etX, sectionLp());
+        gesturesCard.addView(etX, cardLp());
 
         final EditText etY = new EditText(this);
         etY.setTextColor(TEXT_MAIN);
         etY.setHintTextColor(TEXT_MUTED);
         etY.setHint("Y (píxeles)");
         etY.setPadding(dp(14), dp(12), dp(14), dp(12));
-        etY.setBackground(rounded(BG_INPUT, 10, 0));
+        etY.setBackground(rounded(BG_INPUT, 10, DIVIDER));
         etY.setSingleLine();
         etY.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        panel.addView(etY, sectionLp());
+        gesturesCard.addView(etY, cardLp());
 
         LinearLayout gestures = new LinearLayout(this);
         gestures.setOrientation(LinearLayout.HORIZONTAL);
@@ -493,9 +494,9 @@ public class SettingsActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
         glp.topMargin = dp(8);
-        panel.addView(gestures, glp);
+        gesturesCard.addView(gestures, glp);
 
-        Button btnTap = controlButton("Tap");
+        Button btnTap = iconButton("Tap", R.drawable.ic_bolt, true);
         btnTap.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 int x = parseCoord(etX.getText().toString());
@@ -513,7 +514,7 @@ public class SettingsActivity extends Activity {
         });
         gestures.addView(btnTap, controlLp());
 
-        Button btnSwipe = controlButton("Swipe");
+        Button btnSwipe = iconButton("Swipe", R.drawable.ic_bolt, false);
         btnSwipe.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 int x = parseCoord(etX.getText().toString());
@@ -531,7 +532,7 @@ public class SettingsActivity extends Activity {
         });
         gestures.addView(btnSwipe, controlLp());
 
-        Button btnLong = controlButton("Long press");
+        Button btnLong = iconButton("Long press", R.drawable.ic_clock, false);
         btnLong.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 int x = parseCoord(etX.getText().toString());
@@ -549,48 +550,47 @@ public class SettingsActivity extends Activity {
         });
         gestures.addView(btnLong, controlLp());
 
-        panel.addView(sectionTitle("Navegación Android"));
+        panel.addView(gesturesCard, sectionCardLp());
+
+        // ── Navegación Android ──
+        LinearLayout navCard = sectionCard("Navegación Android", R.drawable.ic_chevron_right);
         LinearLayout nav = new LinearLayout(this);
         nav.setOrientation(LinearLayout.HORIZONTAL);
         nav.setWeightSum(3);
-        LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        nlp.topMargin = dp(8);
-        panel.addView(nav, nlp);
+        navCard.addView(nav, cardLp());
 
-        Button btnBack = controlButton("Atrás");
+        Button btnBack = iconButton("Atrás", R.drawable.ic_chevron_right, true);
         btnBack.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { sendNavigation("back"); }
         });
         nav.addView(btnBack, controlLp());
 
-        Button btnHome = controlButton("Inicio");
+        Button btnHome = iconButton("Inicio", R.drawable.ic_home, false);
         btnHome.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { sendNavigation("home"); }
         });
         nav.addView(btnHome, controlLp());
 
-        Button btnRecents = controlButton("Recientes");
+        Button btnRecents = iconButton("Recientes", R.drawable.ic_routines, false);
         btnRecents.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { sendNavigation("recents"); }
         });
         nav.addView(btnRecents, controlLp());
 
-        panel.addView(sectionTitle("Escritura"));
+        panel.addView(navCard, sectionCardLp());
+
+        // ── Escritura ──
+        LinearLayout writeCard = sectionCard("Escritura", R.drawable.ic_info);
         final EditText etText = new EditText(this);
         etText.setTextColor(TEXT_MAIN);
         etText.setHintTextColor(TEXT_MUTED);
         etText.setHint("Texto a escribir");
         etText.setPadding(dp(14), dp(12), dp(14), dp(12));
-        etText.setBackground(rounded(BG_INPUT, 10, 0));
+        etText.setBackground(rounded(BG_INPUT, 10, DIVIDER));
         etText.setSingleLine(false);
         etText.setMinLines(2);
         etText.setMaxLines(4);
-        LinearLayout.LayoutParams etlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        panel.addView(etText, etlp);
+        writeCard.addView(etText, cardLp());
 
         LinearLayout writeRow = new LinearLayout(this);
         writeRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -599,9 +599,9 @@ public class SettingsActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
         wrlp.topMargin = dp(8);
-        panel.addView(writeRow, wrlp);
+        writeCard.addView(writeRow, wrlp);
 
-        Button btnType = controlButton("Escribir");
+        Button btnType = iconButton("Escribir", R.drawable.ic_bolt, true);
         btnType.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 String text = etText.getText().toString();
@@ -618,24 +618,24 @@ public class SettingsActivity extends Activity {
         });
         writeRow.addView(btnType, controlLp());
 
-        Button btnClear = controlButton("Limpiar texto");
+        Button btnClear = iconButton("Limpiar texto", R.drawable.ic_trash, false);
         btnClear.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { sendClearText(); }
         });
         writeRow.addView(btnClear, controlLp());
 
-        panel.addView(sectionTitle("Elementos"));
+        panel.addView(writeCard, sectionCardLp());
+
+        // ── Elementos ──
+        LinearLayout elemCard = sectionCard("Elementos", R.drawable.ic_inspector);
         final EditText etElement = new EditText(this);
         etElement.setTextColor(TEXT_MAIN);
         etElement.setHintTextColor(TEXT_MUTED);
         etElement.setHint("Texto visible o resource ID");
         etElement.setPadding(dp(14), dp(12), dp(14), dp(12));
-        etElement.setBackground(rounded(BG_INPUT, 10, 0));
+        etElement.setBackground(rounded(BG_INPUT, 10, DIVIDER));
         etElement.setSingleLine();
-        LinearLayout.LayoutParams eelp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        panel.addView(etElement, eelp);
+        elemCard.addView(etElement, cardLp());
 
         LinearLayout elemRow = new LinearLayout(this);
         elemRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -644,9 +644,9 @@ public class SettingsActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
         erlp.topMargin = dp(8);
-        panel.addView(elemRow, erlp);
+        elemCard.addView(elemRow, erlp);
 
-        Button btnClickText = controlButton("Click texto");
+        Button btnClickText = iconButton("Click texto", R.drawable.ic_control, true);
         btnClickText.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 String text = etElement.getText().toString();
@@ -663,7 +663,7 @@ public class SettingsActivity extends Activity {
         });
         elemRow.addView(btnClickText, controlLp());
 
-        Button btnClickId = controlButton("Click ID");
+        Button btnClickId = iconButton("Click ID", R.drawable.ic_shield, false);
         btnClickId.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 String id = etElement.getText().toString();
@@ -680,17 +680,16 @@ public class SettingsActivity extends Activity {
         });
         elemRow.addView(btnClickId, controlLp());
 
-        panel.addView(sectionTitle("Avanzado"));
+        panel.addView(elemCard, sectionCardLp());
+
+        // ── Avanzado ──
+        LinearLayout advCard = sectionCard("Avanzado", R.drawable.ic_settings);
         LinearLayout adv = new LinearLayout(this);
         adv.setOrientation(LinearLayout.HORIZONTAL);
-        adv.setWeightSum(3);
-        LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        alp.topMargin = dp(8);
-        panel.addView(adv, alp);
+        adv.setWeightSum(2);
+        advCard.addView(adv, cardLp());
 
-        Button btnScroll = controlButton("Scroll abajo");
+        Button btnScroll = iconButton("Scroll abajo", R.drawable.ic_chevron_right, false);
         btnScroll.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 if (isServiceAvailable()) {
@@ -702,7 +701,7 @@ public class SettingsActivity extends Activity {
         });
         adv.addView(btnScroll, controlLp());
 
-        Button btnScreenshot = controlButton("Captura del sistema");
+        Button btnScreenshot = iconButton("Captura", R.drawable.ic_inspector, true);
         btnScreenshot.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 if (isServiceAvailable()) {
@@ -713,6 +712,8 @@ public class SettingsActivity extends Activity {
             }
         });
         adv.addView(btnScreenshot, controlLp());
+
+        panel.addView(advCard, sectionCardLp());
 
         return panel;
     }
@@ -733,8 +734,9 @@ public class SettingsActivity extends Activity {
     private LinearLayout buildInspectorPanel() {
         LinearLayout panel = createPanel();
 
-        panel.addView(sectionTitle("Árbol de accesibilidad"));
-        Button btnTree = controlButton("Leer árbol UI");
+        // ── Árbol de accesibilidad ──
+        LinearLayout treeCard = sectionCard("Árbol de accesibilidad", R.drawable.ic_routines);
+        Button btnTree = iconButton("Leer árbol UI", R.drawable.ic_routines, true);
         btnTree.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 if (isServiceAvailable()) {
@@ -744,20 +746,22 @@ public class SettingsActivity extends Activity {
                 }
             }
         });
-        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        panel.addView(btnTree, tlp);
+        treeCard.addView(btnTree, cardLp());
 
         TextView treeInfo = new TextView(this);
         treeInfo.setText("El árbol se guarda en /sdcard/Download/accessdroid-tree.txt y se lee con: amctl tree");
         treeInfo.setTextSize(11);
         treeInfo.setTextColor(TEXT_DIM);
-        treeInfo.setPadding(dp(8), dp(4), dp(8), dp(8));
-        panel.addView(treeInfo, sectionLp());
+        treeInfo.setMaxLines(2);
+        treeInfo.setEllipsize(TextUtils.TruncateAt.END);
+        treeInfo.setPadding(dp(4), dp(6), dp(4), dp(4));
+        treeCard.addView(treeInfo, cardLp());
 
-        panel.addView(sectionTitle("Captura de pantalla"));
-        Button btnScreenshot = controlButton("Guardar captura PNG");
+        panel.addView(treeCard, sectionCardLp());
+
+        // ── Captura de pantalla ──
+        LinearLayout shotCard = sectionCard("Captura de pantalla", R.drawable.ic_inspector);
+        Button btnScreenshot = iconButton("Guardar captura PNG", R.drawable.ic_inspector, true);
         btnScreenshot.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 if (isServiceAvailable()) {
@@ -767,33 +771,31 @@ public class SettingsActivity extends Activity {
                 }
             }
         });
-        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        slp.topMargin = dp(8);
-        panel.addView(btnScreenshot, slp);
+        shotCard.addView(btnScreenshot, cardLp());
 
         TextView shotInfo = new TextView(this);
         shotInfo.setText("La captura se guarda en /sdcard/Download/accessdroid-shot.png y se lee con: amctl see");
         shotInfo.setTextSize(11);
         shotInfo.setTextColor(TEXT_DIM);
-        shotInfo.setPadding(dp(8), dp(4), dp(8), dp(8));
-        panel.addView(shotInfo, sectionLp());
+        shotInfo.setMaxLines(2);
+        shotInfo.setEllipsize(TextUtils.TruncateAt.END);
+        shotInfo.setPadding(dp(4), dp(6), dp(4), dp(4));
+        shotCard.addView(shotInfo, cardLp());
 
-        panel.addView(sectionTitle("Buscar elemento"));
+        panel.addView(shotCard, sectionCardLp());
+
+        // ── Buscar elemento ──
+        LinearLayout findCard = sectionCard("Buscar elemento", R.drawable.ic_inspector);
         etInspectorSearch = new EditText(this);
         etInspectorSearch.setTextColor(TEXT_MAIN);
         etInspectorSearch.setHintTextColor(TEXT_MUTED);
         etInspectorSearch.setHint("Texto visible del elemento");
         etInspectorSearch.setPadding(dp(14), dp(12), dp(14), dp(12));
-        etInspectorSearch.setBackground(rounded(BG_INPUT, 10, 0));
+        etInspectorSearch.setBackground(rounded(BG_INPUT, 10, DIVIDER));
         etInspectorSearch.setSingleLine();
-        LinearLayout.LayoutParams selp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        panel.addView(etInspectorSearch, selp);
+        findCard.addView(etInspectorSearch, cardLp());
 
-        Button btnFind = controlButton("Buscar y hacer click");
+        Button btnFind = iconButton("Buscar y hacer click", R.drawable.ic_control, true);
         btnFind.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 String text = etInspectorSearch.getText().toString();
@@ -808,19 +810,22 @@ public class SettingsActivity extends Activity {
                 }
             }
         });
-        LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        flp.topMargin = dp(8);
-        panel.addView(btnFind, flp);
+        findCard.addView(btnFind, cardLp());
 
-        panel.addView(sectionTitle("Estado de operaciones"));
+        panel.addView(findCard, sectionCardLp());
+
+        // ── Estado de operaciones ──
+        LinearLayout opsCard = sectionCard("Estado de operaciones", R.drawable.ic_info);
         TextView tvOps = new TextView(this);
         tvOps.setText("Los resultados se confirman leyendo los archivos generados o el ConnectionLog. El envío del broadcast no confirma ejecución.");
-        tvOps.setTextSize(11);
+        tvOps.setTextSize(12);
         tvOps.setTextColor(TEXT_DIM);
-        tvOps.setPadding(dp(8), dp(4), dp(8), dp(4));
-        panel.addView(tvOps, sectionLp());
+        tvOps.setMaxLines(3);
+        tvOps.setEllipsize(TextUtils.TruncateAt.END);
+        tvOps.setPadding(dp(4), dp(4), dp(4), dp(4));
+        opsCard.addView(tvOps, cardLp());
+
+        panel.addView(opsCard, sectionCardLp());
 
         return panel;
     }
@@ -1796,6 +1801,74 @@ public class SettingsActivity extends Activity {
         chip.addView(btnShizuku);
 
         return chip;
+    }
+
+    private LinearLayout sectionCard(String title, int iconRes) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(getResources().getDrawable(R.drawable.bg_card));
+        card.setPadding(dp(16), dp(16), dp(16), dp(16));
+
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(iconRes);
+        icon.setColorFilter(ACCENT_GREEN);
+        header.addView(icon, new LinearLayout.LayoutParams(dp(20), dp(20)));
+
+        TextView tv = new TextView(this);
+        tv.setText(title);
+        tv.setTextSize(15);
+        tv.setTextColor(TEXT_MAIN);
+        tv.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams tvlp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        tvlp.leftMargin = dp(10);
+        header.addView(tv, tvlp);
+
+        card.addView(header);
+
+        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        clp.topMargin = dp(12);
+        return card;
+    }
+
+    private LinearLayout.LayoutParams sectionCardLp() {
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        p.topMargin = dp(12);
+        return p;
+    }
+
+    private Button iconButton(String label, int iconRes, boolean primary) {
+        Button b = new Button(this);
+        b.setText(label);
+        b.setAllCaps(false);
+        b.setTextSize(13);
+        b.setTextColor(0xFFFFFFFF);
+        b.setTypeface(Typeface.DEFAULT_BOLD);
+        b.setBackground(getResources().getDrawable(
+                primary ? R.drawable.bg_button_primary : R.drawable.bg_button_secondary));
+        b.setPadding(dp(8), dp(10), dp(8), dp(10));
+        b.setStateListAnimator(null);
+        b.setMinimumHeight(dp(48));
+        if (!primary) b.setTextColor(ACCENT_GREEN);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        lp.leftMargin = dp(3);
+        lp.rightMargin = dp(3);
+        b.setLayoutParams(lp);
+        return b;
+    }
+
+    private LinearLayout.LayoutParams cardLp() {
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        p.topMargin = dp(8);
+        return p;
     }
 
     private TextView sectionTitle(String text) {
