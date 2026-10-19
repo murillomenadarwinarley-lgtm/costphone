@@ -257,8 +257,18 @@ echo "✓ javac OK" >> "$DIAGNOSTIC"
 
 # 5. Convert → classes.dex
 echo "[5/7] Create DEX (d8)..." >> "$DIAGNOSTIC"
+CLASS_FILES=()
+while IFS= read -r -d '' f; do
+    CLASS_FILES+=("$f")
+done < <(find "$OUT/classes" -name '*.class' -print0 | sort -z)
+if [[ ${#CLASS_FILES[@]} -eq 0 ]]; then
+    echo "✗ No .class files found in $OUT/classes" >> "$DIAGNOSTIC"
+    echo "No class files" >> "$DIAGNOSTIC"
+    exit 1
+fi
+mkdir -p "$OUT/dex"
 set +e
-DEX_OUT=$(run_d8 "$OUT/classes" --output "$OUT/dex" --lib "$ANDROID_JAR" --min-api 24 ${LIBJARS[@]+"${LIBJARS[@]}"} 2>&1)
+DEX_OUT=$(run_d8 "${CLASS_FILES[@]}" --output "$OUT/dex" --lib "$ANDROID_JAR" --min-api 24 ${LIBJARS[@]+"${LIBJARS[@]}"} 2>&1)
 DEX_EXIT=$?
 set -e
 echo "$DEX_OUT" >> "$DIAGNOSTIC"
@@ -266,6 +276,11 @@ echo "Exit code: $DEX_EXIT" >> "$DIAGNOSTIC"
 if [[ $DEX_EXIT -ne 0 ]]; then
     echo "✗ d8 FAILED at phase 5" >> "$DIAGNOSTIC"
     cat "$DIAGNOSTIC" >> "$OUT/build.log"
+    exit 1
+fi
+if [[ ! -f "$OUT/dex/classes.dex" || ! -s "$OUT/dex/classes.dex" ]]; then
+    echo "✗ classes.dex missing or empty after d8" >> "$DIAGNOSTIC"
+    echo "DEX output missing" >> "$DIAGNOSTIC"
     exit 1
 fi
 echo "✓ d8 OK" >> "$DIAGNOSTIC"
