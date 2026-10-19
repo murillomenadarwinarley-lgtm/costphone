@@ -222,10 +222,10 @@ public class AccessibilityServiceImpl extends AccessibilityService {
     public void onInterrupt() { }
 
     @Override
-    public void onUnbind(android.content.Intent intent) {
+    public boolean onUnbind(android.content.Intent intent) {
         sInstance = null;
         ConnectionLog.add("Servicio de accesibilidad desvinculado");
-        super.onUnbind(intent);
+        return super.onUnbind(intent);
     }
 
     @Override
