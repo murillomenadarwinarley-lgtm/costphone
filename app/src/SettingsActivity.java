@@ -33,22 +33,11 @@ import java.util.List;
 
 public class SettingsActivity extends Activity {
 
-    private static final int BG_DARK      = 0xFF0B1F1D;
-    private static final int BG_HEADER    = 0xFF1FBF8F;
-    private static final int BG_CARD      = 0xFF12302C;
-    private static final int BG_CARD_ALT  = 0xFF1A3A35;
-    private static final int BG_INPUT     = 0xFF12302C;
-    private static final int ACCENT_BLUE  = 0xFF1FBF8F;
-    private static final int ACCENT_GREEN = 0xFF1FBF8F;
-    private static final int ACCENT_RED   = 0xFFF0524F;
-    private static final int ACCENT_AMBER = 0xFFF5B83D;
-    private static final int ACCENT_VIOLET= 0xFF8B5CF6;
-    private static final int TEXT_MAIN    = 0xFFE8F5F1;
-    private static final int TEXT_DIM     = 0xFF8FB5AC;
-    private static final int TEXT_MUTED   = 0xFF6B9488;
-    private static final int LOG_BG       = 0xFF1A3A35;
-    private static final int DIVIDER      = 0xFF1E4A44;
-    private static final int CARD_RADIUS  = 12;
+    // Tokens de colors.xml (Fase 2c): inicializados en onCreate vía Ui.color()
+    private int BG_DARK, BG_HEADER, BG_CARD, BG_CARD_ALT, BG_INPUT;
+    private int ACCENT_BLUE, ACCENT_GREEN, ACCENT_RED, ACCENT_AMBER, ACCENT_VIOLET;
+    private int TEXT_MAIN, TEXT_DIM, TEXT_MUTED, LOG_BG, DIVIDER;
+    private static final int CARD_RADIUS  = 20;
     private static final int STATUS_RADIUS= 999;
 
     private static final String SECRET = "termux-accessdroid-2025";
@@ -107,6 +96,23 @@ public class SettingsActivity extends Activity {
         super.onCreate(b);
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 
+        // Cargar tokens de colors.xml
+        BG_DARK      = Ui.color(this, "bg");
+        BG_HEADER    = Ui.color(this, "bg");
+        BG_CARD      = Ui.color(this, "surface");
+        BG_CARD_ALT  = Ui.color(this, "surface2");
+        BG_INPUT     = Ui.color(this, "surface");
+        ACCENT_BLUE  = Ui.color(this, "accent");
+        ACCENT_GREEN = Ui.color(this, "accent");
+        ACCENT_RED   = Ui.color(this, "error");
+        ACCENT_AMBER = Ui.color(this, "aviso");
+        ACCENT_VIOLET= Ui.color(this, "accent2");
+        TEXT_MAIN    = Ui.color(this, "text");
+        TEXT_DIM     = Ui.color(this, "text2");
+        TEXT_MUTED   = Ui.color(this, "text3");
+        LOG_BG       = Ui.color(this, "surface");
+        DIVIDER      = Ui.color(this, "border");
+
         android.widget.FrameLayout outer = new android.widget.FrameLayout(this);
         outer.setBackgroundColor(BG_DARK);
 
@@ -119,7 +125,9 @@ public class SettingsActivity extends Activity {
         root.addView(headerArea, lpMATCH(0));
 
         headerArea.addView(buildHeader(), lpMATCH(0));
-        headerArea.addView(shizukuChip(), lpMATCH(8));
+
+        // Ocultar barra inferior con teclado abierto (ajusteResize + adjustNothing)
+        getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
 
         ScrollView contentScroll = new ScrollView(this);
         contentScroll.setLayoutParams(new LinearLayout.LayoutParams(
@@ -240,8 +248,8 @@ public class SettingsActivity extends Activity {
     private View buildTabBar() {
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
-        bar.setBackgroundColor(BG_CARD);
-        bar.setPadding(dp(4), dp(4), dp(4), dp(4));
+        bar.setBackground(getResources().getDrawable(R.drawable.bg_tab_bar));
+        bar.setPadding(dp(6), dp(6), dp(6), dp(8));
 
         tabInicio    = tabButton("Inicio",    R.drawable.ic_home,     TAB_INICIO);
         tabControl   = tabButton("Control",   R.drawable.ic_control,  TAB_CONTROL);
@@ -311,14 +319,14 @@ public class SettingsActivity extends Activity {
     private void styleTab(View tab, boolean active) {
         if (!(tab instanceof LinearLayout)) return;
         LinearLayout item = (LinearLayout) tab;
+        // píldora translúcida DETRÁS de icono+etiqueta (fondo, no cubre)
         item.setBackgroundResource(active ? R.drawable.bg_tab_active : 0);
-        // icono
+        int fg = active ? ACCENT_GREEN : TEXT_MUTED;
         if (item.getChildCount() > 0 && item.getChildAt(0) instanceof ImageView) {
-            ((ImageView) item.getChildAt(0)).setColorFilter(active ? ACCENT_GREEN : TEXT_DIM);
+            ((ImageView) item.getChildAt(0)).setColorFilter(fg);
         }
-        // etiqueta
         if (item.getChildCount() > 1 && item.getChildAt(1) instanceof TextView) {
-            ((TextView) item.getChildAt(1)).setTextColor(active ? ACCENT_GREEN : TEXT_DIM);
+            ((TextView) item.getChildAt(1)).setTextColor(fg);
         }
     }
 
@@ -328,6 +336,9 @@ public class SettingsActivity extends Activity {
 
     private LinearLayout buildInicioPanel() {
         LinearLayout panel = createPanel();
+
+        // chip Shizuku (antes barra fija en header)
+        panel.addView(shizukuChip(), lpMATCH(0));
 
         // tarjeta de estado de accesibilidad
         LinearLayout statusCard = new LinearLayout(this);
@@ -1773,13 +1784,14 @@ public class SettingsActivity extends Activity {
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setPadding(dp(16), dp(12), dp(16), dp(12));
-        header.setBackground(rounded(BG_HEADER, CARD_RADIUS, 0));
+        header.setPadding(dp(16), dp(10), dp(16), dp(10));
+        header.setBackgroundColor(BG_DARK);
+        header.setMinimumHeight(dp(64));
 
         ImageView logo = new ImageView(this);
         logo.setImageResource(R.mipmap.ic_launcher);
         logo.setPadding(dp(6), dp(6), dp(6), dp(6));
-        logo.setBackground(rounded(ACCENT_BLUE, 8, 0));
+        logo.setBackground(Ui.shape(this, "surface2", 12f, "border", 1f));
         logo.setLayoutParams(new LinearLayout.LayoutParams(dp(40), dp(40)));
         header.addView(logo);
 
@@ -1789,52 +1801,66 @@ public class SettingsActivity extends Activity {
         titleBlock.setLayoutParams(new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
+        // "Cost" blanco + "Phone" en acento
         TextView title = new TextView(this);
         title.setText("CostPhone");
-        title.setTextSize(20);
-        title.setTextColor(0xFFFFFFFF);
+        title.setTextSize(18);
         title.setTypeface(Typeface.DEFAULT_BOLD);
+        android.text.SpannableString span = new android.text.SpannableString("CostPhone");
+        span.setSpan(new android.text.style.ForegroundColorSpan(TEXT_MAIN), 0, 4,
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        span.setSpan(new android.text.style.ForegroundColorSpan(ACCENT_BLUE), 4, 9,
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        title.setText(span);
         titleBlock.addView(title);
 
         TextView sub = new TextView(this);
-        sub.setText("Centro de control de Android");
-        sub.setTextSize(12);
-        sub.setTextColor(0xFF8FB5AC);
+        sub.setText("Control remoto de Android");
+        sub.setTextSize(11);
+        sub.setTextColor(TEXT_DIM);
+        sub.setSingleLine(true);
+        sub.setEllipsize(TextUtils.TruncateAt.END);
         titleBlock.addView(sub);
 
         header.addView(titleBlock);
 
-        // chip de estado con punto de color
+        // chip de estado (punto + Conectado/Desconectado)
         LinearLayout statusChip = new LinearLayout(this);
         statusChip.setOrientation(LinearLayout.HORIZONTAL);
         statusChip.setGravity(Gravity.CENTER_VERTICAL);
         statusChip.setPadding(dp(8), dp(4), dp(8), dp(4));
-        statusChip.setBackground(rounded(0x33FFFFFF, 999, 0));
+        statusChip.setBackground(Ui.shape(this, "surface2", 999f, null, 0));
 
         headerDot = new View(this);
-        headerDot.setBackground(rounded(TEXT_MUTED, 999, 0));
+        headerDot.setBackground(rounded(TEXT_MUTED, STATUS_RADIUS, 0));
         statusChip.addView(headerDot, lp(dp(8), dp(8), 0));
 
         headerStatusText = new TextView(this);
         headerStatusText.setTextSize(11);
-        headerStatusText.setTextColor(0xFF8FB5AC);
+        headerStatusText.setTextColor(TEXT_DIM);
         headerStatusText.setTypeface(Typeface.DEFAULT_BOLD);
+        headerStatusText.setSingleLine(true);
         LinearLayout.LayoutParams hstlp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         hstlp.leftMargin = dp(6);
         statusChip.addView(headerStatusText, hstlp);
 
-        TextView version = new TextView(this);
-        version.setText("v" + versionName());
-        version.setTextSize(11);
-        version.setTextColor(0xFF8FB5AC);
-        version.setPadding(dp(8), dp(4), dp(8), dp(4));
-        version.setBackground(rounded(0x33FFFFFF, 4, 0));
-        LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams sclp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        vlp.leftMargin = dp(8);
-        header.addView(version, vlp);
-        header.addView(statusChip);
+        sclp.rightMargin = dp(8);
+        header.addView(statusChip, sclp);
+
+        // engranaje que abre Ajustes
+        ImageView gear = new ImageView(this);
+        gear.setImageResource(R.drawable.ic_settings);
+        gear.setColorFilter(TEXT_DIM);
+        gear.setPadding(dp(10), dp(10), dp(10), dp(10));
+        gear.setMinimumHeight(dp(48));
+        gear.setMinimumWidth(dp(48));
+        gear.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { showTab(TAB_AJUSTES); }
+        });
+        header.addView(gear);
 
         return header;
     }
