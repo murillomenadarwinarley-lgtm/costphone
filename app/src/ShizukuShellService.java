@@ -188,11 +188,12 @@ public class ShizukuShellService extends ICostPhoneShell.Stub {
             pb.redirectErrorStream(true);
             p = pb.start();
             r = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            final BufferedReader reader = r;
             // Reader thread to consume output concurrently
             Thread readerThread = new Thread(() -> {
                 try {
                     String line;
-                    while ((line = r.readLine()) != null) {
+                    while ((line = reader.readLine()) != null) {
                         out.append(line).append("\n");
                     }
                 } catch (IOException ignored) {}
@@ -216,3 +217,5 @@ public class ShizukuShellService extends ICostPhoneShell.Stub {
             try { if (r != null) r.close(); } catch (IOException ignored) {}
             try { if (p != null) p.destroy(); } catch (Exception ignored) {}
         }
+    }
+}
