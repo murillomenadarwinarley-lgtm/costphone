@@ -837,32 +837,28 @@ public class SettingsActivity extends Activity {
     private LinearLayout buildRutinasPanel() {
         LinearLayout panel = createPanel();
 
-        panel.addView(sectionTitle("Rutinas guardadas"));
+        // ── Rutinas guardadas ──
+        LinearLayout listCard = sectionCard("Rutinas guardadas", R.drawable.ic_routines);
 
         final LinearLayout routinesList = new LinearLayout(this);
         routinesList.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams rllp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        rllp.topMargin = dp(8);
-        panel.addView(routinesList, rllp);
+        listCard.addView(routinesList, cardLp());
 
         refreshRoutinesList(routinesList);
+        panel.addView(listCard, sectionCardLp());
 
-        panel.addView(sectionTitle("Crear rutina"));
+        // ── Crear rutina ──
+        LinearLayout createCard = sectionCard("Crear rutina", R.drawable.ic_plus);
         final EditText etName = new EditText(this);
         etName.setTextColor(TEXT_MAIN);
         etName.setHintTextColor(TEXT_MUTED);
         etName.setHint("Nombre de la rutina");
         etName.setPadding(dp(14), dp(12), dp(14), dp(12));
-        etName.setBackground(rounded(BG_INPUT, 10, 0));
+        etName.setBackground(rounded(BG_INPUT, 10, DIVIDER));
         etName.setSingleLine();
-        LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        panel.addView(etName, nlp);
+        createCard.addView(etName, cardLp());
 
-        Button btnSave = controlButton("Guardar nueva rutina");
+        Button btnSave = iconButton("Guardar nueva rutina", R.drawable.ic_plus, true);
         btnSave.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 String name = etName.getText().toString().trim();
@@ -875,52 +871,39 @@ public class SettingsActivity extends Activity {
                 toast("Rutina '" + name + "' guardada. Añádele pasos desde la lista.");
             }
         });
-        LinearLayout.LayoutParams svlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        svlp.topMargin = dp(8);
-        panel.addView(btnSave, svlp);
+        createCard.addView(btnSave, cardLp());
+        panel.addView(createCard, sectionCardLp());
 
-        panel.addView(sectionTitle("Añadir paso a rutina"));
+        // ── Añadir paso ──
+        LinearLayout stepCard = sectionCard("Añadir paso a rutina", R.drawable.ic_bolt);
         final EditText etRoutineName = new EditText(this);
         etRoutineName.setTextColor(TEXT_MAIN);
         etRoutineName.setHintTextColor(TEXT_MUTED);
         etRoutineName.setHint("Nombre de la rutina");
         etRoutineName.setPadding(dp(14), dp(12), dp(14), dp(12));
-        etRoutineName.setBackground(rounded(BG_INPUT, 10, 0));
+        etRoutineName.setBackground(rounded(BG_INPUT, 10, DIVIDER));
         etRoutineName.setSingleLine();
-        LinearLayout.LayoutParams rnlP = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        panel.addView(etRoutineName, rnlP);
+        stepCard.addView(etRoutineName, cardLp());
 
         final EditText etAction = new EditText(this);
         etAction.setTextColor(TEXT_MAIN);
         etAction.setHintTextColor(TEXT_MUTED);
         etAction.setHint("Acción (tap, swipe, type, back, home...)");
         etAction.setPadding(dp(14), dp(12), dp(14), dp(12));
-        etAction.setBackground(rounded(BG_INPUT, 10, 0));
+        etAction.setBackground(rounded(BG_INPUT, 10, DIVIDER));
         etAction.setSingleLine();
-        LinearLayout.LayoutParams etalp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        etalp.topMargin = dp(8);
-        panel.addView(etAction, etalp);
+        stepCard.addView(etAction, cardLp());
 
         final EditText etParam = new EditText(this);
         etParam.setTextColor(TEXT_MAIN);
         etParam.setHintTextColor(TEXT_MUTED);
         etParam.setHint("Parámetros (ej: 100,200 o texto)");
         etParam.setPadding(dp(14), dp(12), dp(14), dp(12));
-        etParam.setBackground(rounded(BG_INPUT, 10, 0));
+        etParam.setBackground(rounded(BG_INPUT, 10, DIVIDER));
         etParam.setSingleLine();
-        LinearLayout.LayoutParams etplp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        etplp.topMargin = dp(8);
-        panel.addView(etParam, etplp);
+        stepCard.addView(etParam, cardLp());
 
-        Button btnAddStep = controlButton("Añadir paso");
+        Button btnAddStep = iconButton("Añadir paso", R.drawable.ic_plus, true);
         btnAddStep.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 String rName = etRoutineName.getText().toString().trim();
@@ -936,11 +919,9 @@ public class SettingsActivity extends Activity {
                 toast("Paso añadido a '" + rName + "'");
             }
         });
-        LinearLayout.LayoutParams aslp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        aslp.topMargin = dp(8);
-        panel.addView(btnAddStep, aslp);
+        stepCard.addView(btnAddStep, cardLp());
+
+        panel.addView(stepCard, sectionCardLp());
 
         return panel;
     }
@@ -949,19 +930,36 @@ public class SettingsActivity extends Activity {
         container.removeAllViews();
         List<String[]> routines = loadRoutines();
         if (routines.isEmpty()) {
+            LinearLayout emptyCard = new LinearLayout(this);
+            emptyCard.setOrientation(LinearLayout.VERTICAL);
+            emptyCard.setGravity(Gravity.CENTER);
+            emptyCard.setPadding(dp(16), dp(24), dp(16), dp(24));
+
+            ImageView emptyIcon = new ImageView(this);
+            emptyIcon.setImageResource(R.drawable.ic_routines);
+            emptyIcon.setColorFilter(TEXT_MUTED);
+            emptyCard.addView(emptyIcon, new LinearLayout.LayoutParams(dp(40), dp(40)));
+
             TextView empty = new TextView(this);
-            empty.setText("No hay rutinas guardadas.");
+            empty.setText("No hay rutinas guardadas.\nCrea una con el formulario de abajo.");
             empty.setTextSize(13);
             empty.setTextColor(TEXT_MUTED);
-            empty.setPadding(dp(16), dp(12), dp(16), dp(12));
-            container.addView(empty);
+            empty.setGravity(Gravity.CENTER);
+            empty.setMaxLines(2);
+            empty.setEllipsize(TextUtils.TruncateAt.END);
+            LinearLayout.LayoutParams elp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            elp.topMargin = dp(12);
+            emptyCard.addView(empty, elp);
+
+            container.addView(emptyCard);
             return;
         }
         for (final String[] routine : routines) {
             LinearLayout card = new LinearLayout(this);
             card.setOrientation(LinearLayout.VERTICAL);
             card.setPadding(dp(12), dp(10), dp(12), dp(10));
-            card.setBackground(rounded(BG_CARD, 12, 0));
+            card.setBackground(getResources().getDrawable(R.drawable.bg_card));
 
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
