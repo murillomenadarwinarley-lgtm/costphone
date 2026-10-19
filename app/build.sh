@@ -189,6 +189,15 @@ else
     FULLCP="$ANDROID_JAR"
 fi
 
+# --- Lambda Stubs (core-lambda-stubs.jar) ---
+LAMBDA_JAR="$SDK_BT/core-lambda-stubs.jar"
+if [[ ! -f "$LAMBDA_JAR" ]]; then
+    echo "✗ core-lambda-stubs.jar not found in $SDK_BT" >> "$DIAGNOSTIC"
+    echo "Lambda stubs not found" >> "$DIAGNOSTIC"
+    exit 1
+fi
+echo "✓ Lambda stubs: $LAMBDA_JAR" >> "$DIAGNOSTIC"
+
 AIDLFILES=()
 if [[ -d "$PROJ/src/aidl" ]]; then
     AIDLFILES=($(find "$PROJ/src/aidl" -name '*.aidl' | sort))
@@ -233,7 +242,7 @@ javac_output=$($JAVA_CMD \
     --source 1.8 --target 1.8 \
     -bootclasspath "$ANDROID_JAR" \
     -d "$OUT/classes" \
-    -classpath "$FULLCP" \
+    -classpath "$LAMBDA_JAR:$FULLCP" \
     "${SRCS[@]}" ${AIDLJAVA[@]+"${AIDLJAVA[@]}"} ${RJAVA[@]+"${RJAVA[@]}"} 2>&1)
 javac_exit=$?
 set -e
