@@ -231,7 +231,7 @@ if [[ ! -x "$JAVA_CMD" ]]; then
 fi
 javac_output=$($JAVA_CMD \
     --source 1.8 --target 1.8 \
-    --bootclasspath "$ANDROID_JAR" \
+    -bootclasspath "$ANDROID_JAR" \
     -d "$OUT/classes" \
     -classpath "$FULLCP" \
     "${SRCS[@]}" ${AIDLJAVA[@]+"${AIDLJAVA[@]}"} ${RJAVA[@]+"${RJAVA[@]}"} 2>&1)
