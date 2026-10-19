@@ -341,7 +341,8 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                 }
                 break;
             }
-            case ACTION_CLICK_ID: {
+            case ACTION_CLICK_ID:
+            case ACTION_FIND_ID: {
                 String rid = intent.getStringExtra("id");
                 if (rid != null && !rid.isEmpty()) {
                     AccessibilityNodeInfo root = rootFor(disp(intent));
@@ -350,6 +351,8 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                         if (!nodes.isEmpty()) {
                             boolean ok = nodes.get(0).performAction(AccessibilityNodeInfo.ACTION_CLICK);
                             Log.i(TAG, "click id=" + rid + " → " + ok);
+                        } else {
+                            Log.w(TAG, "find id=" + rid + " → no encontrado");
                         }
                     }
                 }
