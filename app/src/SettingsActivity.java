@@ -560,7 +560,7 @@ public class SettingsActivity extends Activity {
         LinearLayout panel = createPanel();
 
         // ── Gestos ──
-        LinearLayout gesturesCard = sectionCard("Gestos", R.drawable.ic_control);
+        LinearLayout gesturesCard = sectionCard("Gestos", R.drawable.ic_touch);
 
         final EditText etX = new EditText(this);
         etX.setTextColor(TEXT_MAIN);
@@ -591,7 +591,7 @@ public class SettingsActivity extends Activity {
         glp.topMargin = dp(8);
         gesturesCard.addView(gestures, glp);
 
-        Button btnTap = iconButton("Tap", R.drawable.ic_bolt, true);
+        Button btnTap = iconButton("Tap", R.drawable.ic_touch, false);
         btnTap.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 int x = parseCoord(etX.getText().toString());
@@ -609,7 +609,7 @@ public class SettingsActivity extends Activity {
         });
         gestures.addView(btnTap, controlLp());
 
-        Button btnSwipe = iconButton("Swipe", R.drawable.ic_bolt, false);
+        Button btnSwipe = iconButton("Swipe", R.drawable.ic_touch, false);
         btnSwipe.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 int x = parseCoord(etX.getText().toString());
@@ -627,7 +627,7 @@ public class SettingsActivity extends Activity {
         });
         gestures.addView(btnSwipe, controlLp());
 
-        Button btnLong = iconButton("Long press", R.drawable.ic_clock, false);
+        Button btnLong = iconButton("Long press", R.drawable.ic_pulse, false);
         btnLong.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 int x = parseCoord(etX.getText().toString());
@@ -648,13 +648,13 @@ public class SettingsActivity extends Activity {
         panel.addView(gesturesCard, sectionCardLp());
 
         // ── Navegación Android ──
-        LinearLayout navCard = sectionCard("Navegación Android", R.drawable.ic_chevron_right);
+        LinearLayout navCard = sectionCard("Navegación Android", R.drawable.ic_nav);
         LinearLayout nav = new LinearLayout(this);
         nav.setOrientation(LinearLayout.HORIZONTAL);
         nav.setWeightSum(3);
         navCard.addView(nav, cardLp());
 
-        Button btnBack = iconButton("Atrás", R.drawable.ic_chevron_right, true);
+        Button btnBack = iconButton("Atrás", R.drawable.ic_arrow_back, false);
         btnBack.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { sendNavigation("back"); }
         });
@@ -666,7 +666,7 @@ public class SettingsActivity extends Activity {
         });
         nav.addView(btnHome, controlLp());
 
-        Button btnRecents = iconButton("Recientes", R.drawable.ic_routines, false);
+        Button btnRecents = iconButton("Recientes", R.drawable.ic_nav, false);
         btnRecents.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { sendNavigation("recents"); }
         });
@@ -675,7 +675,7 @@ public class SettingsActivity extends Activity {
         panel.addView(navCard, sectionCardLp());
 
         // ── Escritura ──
-        LinearLayout writeCard = sectionCard("Escritura", R.drawable.ic_info);
+        LinearLayout writeCard = sectionCard("Escritura", R.drawable.ic_keyboard);
         final EditText etText = new EditText(this);
         etText.setTextColor(TEXT_MAIN);
         etText.setHintTextColor(TEXT_MUTED);
@@ -696,7 +696,7 @@ public class SettingsActivity extends Activity {
         wrlp.topMargin = dp(8);
         writeCard.addView(writeRow, wrlp);
 
-        Button btnType = iconButton("Escribir", R.drawable.ic_bolt, true);
+        Button btnType = iconButton("Escribir", R.drawable.ic_keyboard, true);
         btnType.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 String text = etText.getText().toString();
@@ -713,7 +713,7 @@ public class SettingsActivity extends Activity {
         });
         writeRow.addView(btnType, controlLp());
 
-        Button btnClear = iconButton("Limpiar texto", R.drawable.ic_trash, false);
+        Button btnClear = iconButton("Limpiar texto", R.drawable.ic_eraser, false);
         btnClear.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { sendClearText(); }
         });
@@ -722,7 +722,7 @@ public class SettingsActivity extends Activity {
         panel.addView(writeCard, sectionCardLp());
 
         // ── Elementos ──
-        LinearLayout elemCard = sectionCard("Elementos", R.drawable.ic_inspector);
+        LinearLayout elemCard = sectionCard("Elementos", R.drawable.ic_crosshair);
         final EditText etElement = new EditText(this);
         etElement.setTextColor(TEXT_MAIN);
         etElement.setHintTextColor(TEXT_MUTED);
@@ -741,7 +741,7 @@ public class SettingsActivity extends Activity {
         erlp.topMargin = dp(8);
         elemCard.addView(elemRow, erlp);
 
-        Button btnClickText = iconButton("Click texto", R.drawable.ic_control, true);
+        Button btnClickText = iconButton("Click texto", R.drawable.ic_crosshair, true);
         btnClickText.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 String text = etElement.getText().toString();
@@ -758,7 +758,7 @@ public class SettingsActivity extends Activity {
         });
         elemRow.addView(btnClickText, controlLp());
 
-        Button btnClickId = iconButton("Click ID", R.drawable.ic_shield, false);
+        Button btnClickId = iconButton("Click ID", R.drawable.ic_search, false);
         btnClickId.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 String id = etElement.getText().toString();
@@ -778,13 +778,13 @@ public class SettingsActivity extends Activity {
         panel.addView(elemCard, sectionCardLp());
 
         // ── Avanzado ──
-        LinearLayout advCard = sectionCard("Avanzado", R.drawable.ic_settings);
+        LinearLayout advCard = sectionCard("Avanzado", R.drawable.ic_sliders);
         LinearLayout adv = new LinearLayout(this);
         adv.setOrientation(LinearLayout.HORIZONTAL);
         adv.setWeightSum(2);
         advCard.addView(adv, cardLp());
 
-        Button btnScroll = iconButton("Scroll abajo", R.drawable.ic_chevron_right, false);
+        Button btnScroll = iconButton("Scroll abajo", R.drawable.ic_arrow_down, false);
         btnScroll.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 if (isServiceAvailable()) {
@@ -796,7 +796,7 @@ public class SettingsActivity extends Activity {
         });
         adv.addView(btnScroll, controlLp());
 
-        Button btnScreenshot = iconButton("Captura", R.drawable.ic_inspector, true);
+        Button btnScreenshot = iconButton("Captura", R.drawable.ic_camera, true);
         btnScreenshot.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 if (isServiceAvailable()) {
@@ -830,8 +830,8 @@ public class SettingsActivity extends Activity {
         LinearLayout panel = createPanel();
 
         // ── Árbol de accesibilidad ──
-        LinearLayout treeCard = sectionCard("Árbol de accesibilidad", R.drawable.ic_routines);
-        Button btnTree = iconButton("Leer árbol UI", R.drawable.ic_routines, true);
+        LinearLayout treeCard = sectionCard("Árbol de accesibilidad", R.drawable.ic_tree);
+        Button btnTree = iconButton("Leer árbol UI", R.drawable.ic_tree, true);
         btnTree.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 if (isServiceAvailable()) {
@@ -855,8 +855,8 @@ public class SettingsActivity extends Activity {
         panel.addView(treeCard, sectionCardLp());
 
         // ── Captura de pantalla ──
-        LinearLayout shotCard = sectionCard("Captura de pantalla", R.drawable.ic_inspector);
-        Button btnScreenshot = iconButton("Guardar captura PNG", R.drawable.ic_inspector, true);
+        LinearLayout shotCard = sectionCard("Captura de pantalla", R.drawable.ic_camera);
+        Button btnScreenshot = iconButton("Guardar captura PNG", R.drawable.ic_camera, true);
         btnScreenshot.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 if (isServiceAvailable()) {
@@ -880,7 +880,7 @@ public class SettingsActivity extends Activity {
         panel.addView(shotCard, sectionCardLp());
 
         // ── Buscar elemento ──
-        LinearLayout findCard = sectionCard("Buscar elemento", R.drawable.ic_inspector);
+        LinearLayout findCard = sectionCard("Buscar elemento", R.drawable.ic_search);
         etInspectorSearch = new EditText(this);
         etInspectorSearch.setTextColor(TEXT_MAIN);
         etInspectorSearch.setHintTextColor(TEXT_MUTED);
@@ -890,7 +890,7 @@ public class SettingsActivity extends Activity {
         etInspectorSearch.setSingleLine();
         findCard.addView(etInspectorSearch, cardLp());
 
-        Button btnFind = iconButton("Buscar y hacer click", R.drawable.ic_control, true);
+        Button btnFind = iconButton("Buscar y hacer click", R.drawable.ic_search, true);
         btnFind.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 String text = etInspectorSearch.getText().toString();
@@ -910,7 +910,7 @@ public class SettingsActivity extends Activity {
         panel.addView(findCard, sectionCardLp());
 
         // ── Estado de operaciones ──
-        LinearLayout opsCard = sectionCard("Estado de operaciones", R.drawable.ic_info);
+        LinearLayout opsCard = sectionCard("Estado de operaciones", R.drawable.ic_pulse);
         TextView tvOps = new TextView(this);
         tvOps.setText("Los resultados se confirman leyendo los archivos generados o el ConnectionLog. El envío del broadcast no confirma ejecución.");
         tvOps.setTextSize(12);
@@ -1399,7 +1399,7 @@ public class SettingsActivity extends Activity {
         batDesc.setEllipsize(TextUtils.TruncateAt.END);
         batCard.addView(batDesc, cardLp());
 
-        Button btnBat = iconButton("Excluir de optimización", R.drawable.ic_battery, true);
+        Button btnBat = iconButton("Excluir de optimización", R.drawable.ic_battery, false);
         btnBat.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 try {
