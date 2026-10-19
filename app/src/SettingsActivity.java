@@ -22,24 +22,29 @@ import android.widget.TextView;
 
 import java.util.List;
 
-/**
- * CostPhone — panel principal.
- * Minimalista y premium: logo, estado del servicio y acceso a Ajustes.
- */
 public class SettingsActivity extends Activity {
 
-    // ── Paleta ──
-    private static final int BG_DARK      = 0xFF0B1220;
-    private static final int BG_CARD      = 0xFF131E33;
-    private static final int ACCENT_BLUE  = 0xFF0A66E0;
-    private static final int ACCENT_GREEN = 0xFF34C759;
-    private static final int ACCENT_RED   = 0xFFFF453A;
-    private static final int ACCENT_AMBER = 0xFFFFCC00;
-    private static final int TEXT_MAIN    = 0xFFF2F5FA;
-    private static final int TEXT_DIM     = 0xFF8B97AD;
+    private static final int BG_DARK       = 0xFF0A0F1E;
+    private static final int BG_HEADER     = 0xFF111827;
+    private static final int BG_CARD       = 0xFF151D2E;
+    private static final int BG_CARD_ALT   = 0xFF1A2338;
+    private static final int ACCENT_BLUE   = 0xFF3B82F6;
+    private static final int ACCENT_GREEN  = 0xFF10B981;
+    private static final int ACCENT_RED    = 0xFFEF4444;
+    private static final int ACCENT_AMBER  = 0xFFF59E0B;
+    private static final int TEXT_MAIN     = 0xFFF1F5F9;
+    private static final int TEXT_DIM      = 0xFF94A3B8;
+    private static final int TEXT_MUTED    = 0xFF64748B;
+    private static final int LOG_TEXT      = 0xFF7DD3FC;
+    private static final int LOG_BG        = 0xFF0F172A;
+    private static final int DIVIDER       = 0xFF1E293B;
+    private static final int CARD_RADIUS   = 18;
+    private static final int STATUS_RADIUS = 999;
 
     private View statusDot;
     private TextView tvStatus;
+    private TextView tvStatusDesc;
+    private View statusBanner;
 
     private View shizukuDot;
     private TextView tvShizuku;
@@ -68,117 +73,21 @@ public class SettingsActivity extends Activity {
 
         ScrollView scroll = new ScrollView(this);
         scroll.setBackgroundColor(BG_DARK);
+        scroll.setFillViewport(true);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setGravity(Gravity.CENTER_HORIZONTAL);
-        root.setPadding(dp(28), dp(52), dp(28), dp(40));
+        root.setPadding(dp(16), dp(20), dp(16), dp(24));
         scroll.addView(root);
 
-        // ── Logo ──
-        ImageView logo = new ImageView(this);
-        logo.setImageResource(R.mipmap.ic_launcher);
-        root.addView(logo, lp(dp(118), dp(118), 0));
-
-        // ── Título ──
-        TextView title = new TextView(this);
-        title.setText("CostPhone");
-        title.setTextSize(30);
-        title.setTextColor(TEXT_MAIN);
-        title.setTypeface(Typeface.DEFAULT_BOLD);
-        title.setGravity(Gravity.CENTER);
-        root.addView(title, lpWRAP(18));
-
-        TextView sub = new TextView(this);
-        sub.setText("Control remoto desde Termux");
-        sub.setTextSize(14);
-        sub.setTextColor(TEXT_DIM);
-        sub.setGravity(Gravity.CENTER);
-        root.addView(sub, lpWRAP(6));
-
-        // ── Tarjeta de estado ──
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(rounded(BG_CARD, 24, 0));
-        card.setPadding(dp(22), dp(24), dp(22), dp(24));
-
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-
-        statusDot = new View(this);
-        row.addView(statusDot, lp(dp(14), dp(14), 0));
-
-        tvStatus = new TextView(this);
-        tvStatus.setTextSize(17);
-        tvStatus.setTextColor(TEXT_MAIN);
-        tvStatus.setTypeface(Typeface.DEFAULT_BOLD);
-        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        tlp.leftMargin = dp(12);
-        row.addView(tvStatus, tlp);
-        card.addView(row);
-
-        TextView desc = new TextView(this);
-        desc.setText("Servicio de accesibilidad. Permite a CostPhone leer la pantalla y "
-                + "ejecutar toques, gestos y texto cuando Termux se lo pide. "
-                + "Es lo único que necesitas activar.");
-        desc.setTextSize(14);
-        desc.setTextColor(TEXT_DIM);
-        desc.setLineSpacing(dp(4), 1f);
-        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        dlp.topMargin = dp(16);
-        card.addView(desc, dlp);
-
-        Button btn = new Button(this);
-        btn.setText("Abrir Ajustes de Accesibilidad");
-        btn.setAllCaps(false);
-        btn.setTextSize(16);
-        btn.setTextColor(0xFFFFFFFF);
-        btn.setTypeface(Typeface.DEFAULT_BOLD);
-        btn.setBackground(rounded(ACCENT_BLUE, 16, 0));
-        btn.setPadding(dp(18), dp(14), dp(18), dp(14));
-        btn.setStateListAnimator(null);
-        btn.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
-            }
-        });
-        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        blp.topMargin = dp(22);
-        card.addView(btn, blp);
-
-        root.addView(card, lpMATCH(34));
-
-        // ── Tarjeta de Shizuku (opcional) ──
-        root.addView(shizukuCard(), lpMATCH(14));
-
-        // ── Tarjeta de batería y registro ──
-        root.addView(batteryAndLogCard(), lpMATCH(14));
-
-        // ── Pie ──
-        TextView tip = new TextView(this);
-        tip.setText("Consejo: si MIUI lo desactiva solo, vuelve aquí y reactívalo.");
-        tip.setTextSize(12);
-        tip.setTextColor(TEXT_DIM);
-        tip.setGravity(Gravity.CENTER);
-        root.addView(tip, lpWRAP(24));
-
-        TextView ver = new TextView(this);
-        ver.setText("CostPhone · v" + versionName());
-        ver.setTextSize(12);
-        ver.setTextColor(0xFF546E7A);
-        ver.setGravity(Gravity.CENTER);
-        root.addView(ver, lpWRAP(0));
+        root.addView(buildHeader(), lpMATCH(0));
+        root.addView(serviceCard(), lpMATCH(16));
+        root.addView(shizukuCard(), lpMATCH(12));
+        root.addView(maintenanceCard(), lpMATCH(12));
+        root.addView(buildFooter(), lpMATCH(20));
 
         setContentView(scroll);
 
-        // El resultado del permiso vuelve por aquí, no por onActivityResult.
         try {
             rikka.shizuku.Shizuku.addRequestPermissionResultListener(shizukuPermListener);
             ShizukuManager.registerStateListener(shizukuStateListener);
@@ -213,34 +122,335 @@ public class SettingsActivity extends Activity {
         } catch (Throwable ignored) { }
     }
 
+    private View buildHeader() {
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.VERTICAL);
+        header.setGravity(Gravity.CENTER_HORIZONTAL);
+        header.setPadding(dp(24), dp(28), dp(24), dp(28));
+        header.setBackground(rounded(BG_HEADER, CARD_RADIUS, 0));
+
+        View iconContainer = new View(this);
+        iconContainer.setBackground(rounded(0xFF1E293B, 999, 0));
+
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.mipmap.ic_launcher);
+        logo.setPadding(dp(14), dp(14), dp(14), dp(14));
+        logo.setBackground(rounded(ACCENT_BLUE, 22, 0));
+        logo.setLayoutParams(new LinearLayout.LayoutParams(dp(72), dp(72)));
+
+        LinearLayout logoWrap = new LinearLayout(this);
+        logoWrap.setGravity(Gravity.CENTER);
+        logoWrap.addView(logo);
+        header.addView(logoWrap, lpWRAP(0));
+
+        TextView title = new TextView(this);
+        title.setText("CostPhone");
+        title.setTextSize(28);
+        title.setTextColor(TEXT_MAIN);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setGravity(Gravity.CENTER);
+        header.addView(title, lpWRAP(14));
+
+        TextView sub = new TextView(this);
+        sub.setText("Centro de control de Android");
+        sub.setTextSize(15);
+        sub.setTextColor(TEXT_DIM);
+        sub.setGravity(Gravity.CENTER);
+        header.addView(sub, lpWRAP(8));
+
+        return header;
+    }
+
+    private View serviceCard() {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(rounded(BG_CARD, CARD_RADIUS, 0));
+        card.setPadding(dp(20), dp(20), dp(20), dp(20));
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+
+        statusDot = new View(this);
+        row.addView(statusDot, lp(dp(16), dp(16), 0));
+
+        tvStatus = new TextView(this);
+        tvStatus.setTextSize(18);
+        tvStatus.setTextColor(TEXT_MAIN);
+        tvStatus.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        tlp.leftMargin = dp(12);
+        row.addView(tvStatus, tlp);
+        card.addView(row);
+
+        statusBanner = new View(this);
+        statusBanner.setBackground(rounded(0xFF1E293B, 8, 0));
+        card.addView(statusBanner, lpMATCH(14));
+
+        tvStatusDesc = new TextView(this);
+        tvStatusDesc.setTextSize(13);
+        tvStatusDesc.setTextColor(TEXT_DIM);
+        tvStatusDesc.setLineSpacing(dp(5), 1f);
+        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        dlp.topMargin = dp(12);
+        card.addView(tvStatusDesc, dlp);
+
+        View divider = new View(this);
+        divider.setBackgroundColor(DIVIDER);
+        LinearLayout.LayoutParams dividerLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(1));
+        dividerLp.topMargin = dp(16);
+        dividerLp.bottomMargin = dp(16);
+        card.addView(divider, dividerLp);
+
+        Button btn = new Button(this);
+        btn.setText("Abrir ajustes de accesibilidad");
+        btn.setAllCaps(false);
+        btn.setTextSize(15);
+        btn.setTextColor(0xFFFFFFFF);
+        btn.setTypeface(Typeface.DEFAULT_BOLD);
+        btn.setBackground(rounded(ACCENT_BLUE, 12, 0));
+        btn.setPadding(dp(18), dp(14), dp(18), dp(14));
+        btn.setStateListAnimator(null);
+        btn.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+            }
+        });
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        card.addView(btn, blp);
+
+        return card;
+    }
+
+    private View shizukuCard() {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(rounded(BG_CARD_ALT, CARD_RADIUS, 0));
+        card.setPadding(dp(20), dp(18), dp(20), dp(18));
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+
+        shizukuDot = new View(this);
+        row.addView(shizukuDot, lp(dp(12), dp(12), 0));
+
+        tvShizuku = new TextView(this);
+        tvShizuku.setTextSize(15);
+        tvShizuku.setTextColor(TEXT_MAIN);
+        tvShizuku.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        tlp.leftMargin = dp(10);
+        row.addView(tvShizuku, tlp);
+
+        TextView badge = new TextView(this);
+        badge.setText("OPCIONAL");
+        badge.setTextSize(9);
+        badge.setTextColor(ACCENT_BLUE);
+        badge.setTypeface(Typeface.DEFAULT_BOLD);
+        badge.setPadding(dp(8), dp(3), dp(8), dp(3));
+        badge.setBackground(rounded(0xFF1E3A5F, 4, 0));
+        LinearLayout.LayoutParams blp2 = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        blp2.leftMargin = dp(10);
+        row.addView(badge, blp2);
+
+        card.addView(row);
+
+        TextView desc = new TextView(this);
+        desc.setText("Shell con permisos especiales para gestos y teclas rápidos.");
+        desc.setTextSize(13);
+        desc.setTextColor(TEXT_DIM);
+        desc.setLineSpacing(dp(4), 1f);
+        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        dlp.topMargin = dp(12);
+        card.addView(desc, dlp);
+
+        btnShizuku = new Button(this);
+        btnShizuku.setAllCaps(false);
+        btnShizuku.setTextSize(14);
+        btnShizuku.setTextColor(0xFFFFFFFF);
+        btnShizuku.setTypeface(Typeface.DEFAULT_BOLD);
+        btnShizuku.setBackground(rounded(ACCENT_BLUE, 12, 0));
+        btnShizuku.setPadding(dp(18), dp(12), dp(18), dp(12));
+        btnShizuku.setStateListAnimator(null);
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        blp.topMargin = dp(16);
+        card.addView(btnShizuku, blp);
+
+        return card;
+    }
+
+    private View maintenanceCard() {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(rounded(BG_CARD, CARD_RADIUS, 0));
+        card.setPadding(dp(20), dp(18), dp(20), dp(18));
+
+        TextView head = new TextView(this);
+        head.setText("Mantenimiento");
+        head.setTextSize(15);
+        head.setTextColor(TEXT_MAIN);
+        head.setTypeface(Typeface.DEFAULT_BOLD);
+        card.addView(head);
+
+        TextView batDesc = new TextView(this);
+        batDesc.setText("Excluye CostPhone de la optimización de batería para que "
+                + "Android no lo cierre en segundo plano.");
+        batDesc.setTextSize(13);
+        batDesc.setTextColor(TEXT_DIM);
+        batDesc.setLineSpacing(dp(4), 1f);
+        LinearLayout.LayoutParams bdlp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        bdlp.topMargin = dp(8);
+        card.addView(batDesc, bdlp);
+
+        Button btnBat = new Button(this);
+        btnBat.setText("Excluir de optimización");
+        btnBat.setAllCaps(false);
+        btnBat.setTextSize(14);
+        btnBat.setTextColor(0xFFFFFFFF);
+        btnBat.setTypeface(Typeface.DEFAULT_BOLD);
+        btnBat.setBackground(rounded(ACCENT_BLUE, 12, 0));
+        btnBat.setPadding(dp(16), dp(12), dp(16), dp(12));
+        btnBat.setStateListAnimator(null);
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        blp.topMargin = dp(12);
+        btnBat.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                try {
+                    Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                    i.setData(Uri.parse("package:" + getPackageName()));
+                    startActivity(i);
+                } catch (Throwable t) {
+                    try {
+                        Intent i = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+                        startActivity(i);
+                    } catch (Throwable ignored) { }
+                }
+            }
+        });
+        card.addView(btnBat, blp);
+
+        View divider = new View(this);
+        divider.setBackgroundColor(DIVIDER);
+        LinearLayout.LayoutParams dividerLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(1));
+        dividerLp.topMargin = dp(16);
+        dividerLp.bottomMargin = dp(14);
+        card.addView(divider, dividerLp);
+
+        TextView logHead = new TextView(this);
+        logHead.setText("Registro de eventos");
+        logHead.setTextSize(13);
+        logHead.setTextColor(TEXT_MAIN);
+        logHead.setTypeface(Typeface.DEFAULT_BOLD);
+        card.addView(logHead);
+
+        tvLog = new TextView(this);
+        tvLog.setText(logText());
+        tvLog.setTextSize(11);
+        tvLog.setTextColor(LOG_TEXT);
+        tvLog.setTypeface(Typeface.MONOSPACE);
+        tvLog.setLineSpacing(dp(3), 1f);
+        tvLog.setPadding(dp(12), dp(10), dp(12), dp(10));
+        tvLog.setBackground(rounded(LOG_BG, 8, 0));
+        LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        llp.topMargin = dp(8);
+        card.addView(tvLog, llp);
+
+        LinearLayout btnRow = new LinearLayout(this);
+        btnRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams brlp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        brlp.topMargin = dp(10);
+        card.addView(btnRow, brlp);
+
+        Button btnClear = new Button(this);
+        btnClear.setText("Limpiar registro");
+        btnClear.setAllCaps(false);
+        btnClear.setTextSize(13);
+        btnClear.setTextColor(TEXT_DIM);
+        btnClear.setTypeface(Typeface.DEFAULT_BOLD);
+        btnClear.setBackground(rounded(BG_CARD_ALT, 10, DIVIDER));
+        btnClear.setPadding(dp(14), dp(10), dp(14), dp(10));
+        btnClear.setStateListAnimator(null);
+        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        btnClear.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                ConnectionLog.clear();
+                tvLog.setText("");
+            }
+        });
+        btnRow.addView(btnClear, clp);
+
+        return card;
+    }
+
+    private View buildFooter() {
+        LinearLayout footer = new LinearLayout(this);
+        footer.setOrientation(LinearLayout.HORIZONTAL);
+        footer.setGravity(Gravity.CENTER);
+
+        TextView ver = new TextView(this);
+        ver.setText("CostPhone v" + versionName());
+        ver.setTextSize(11);
+        ver.setTextColor(TEXT_MUTED);
+        footer.addView(ver);
+
+        return footer;
+    }
+
     private void refreshStatus() {
         int state = serviceState();
         int color;
         String text;
+        String desc;
         switch (state) {
             case 2:
                 color = ACCENT_GREEN;
-                text = "Servicio conectado";
+                text = "Conectado";
+                desc = "El servicio de accesibilidad está activo y responde a los comandos de Termux.";
                 break;
             case 1:
                 color = ACCENT_AMBER;
-                text = "Servicio habilitado, sin conectar";
+                text = "Habilitado, sin conexión";
+                desc = "El servicio está activado en ajustes pero no ha establecido conexión todavía.";
                 break;
             default:
                 color = ACCENT_RED;
-                text = "Servicio desactivado";
+                text = "Desactivado";
+                desc = "El servicio de accesibilidad está apagado. Actívalo para permitir el control remoto.";
                 break;
         }
-        statusDot.setBackground(rounded(color, 999, 0));
+        statusDot.setBackground(rounded(color, STATUS_RADIUS, 0));
         tvStatus.setText(text);
         tvStatus.setTextColor(color);
+        tvStatusDesc.setText(desc);
+        statusBanner.setBackground(rounded(0xFF1E293B, 8, 0));
     }
 
-    /**
-     * 0 = apagado, 1 = habilitado pero sin conectar, 2 = conectado.
-     * Compara con ComponentName.unflattenFromString porque el sistema puede
-     * guardar el nombre en forma corta (.AccessibilityServiceImpl) o completa.
-     */
     private int serviceState() {
         if (!isServiceEnabled()) return 0;
         if (AccessibilityServiceImpl.sInstance != null
@@ -269,173 +479,25 @@ public class SettingsActivity extends Activity {
         }
     }
 
-    private View batteryAndLogCard() {
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(rounded(BG_CARD, 24, 0));
-        card.setPadding(dp(22), dp(24), dp(22), dp(24));
-
-        TextView head = new TextView(this);
-        head.setText("Batería y registro");
-        head.setTextSize(17);
-        head.setTextColor(TEXT_MAIN);
-        head.setTypeface(Typeface.DEFAULT_BOLD);
-        card.addView(head);
-
-        TextView desc = new TextView(this);
-        desc.setText("En MIUI/HyperOS Android mata a CostPhone en cuanto sales de la "
-                + "app. Para que no se apague solo, exclúyela de la optimización de "
-                + "batería. El registro de abajo es lo que ha pasado con la "
-                + "conexión de Shizuku y el servicio.");
-        desc.setTextSize(14);
-        desc.setTextColor(TEXT_DIM);
-        desc.setLineSpacing(dp(4), 1f);
-        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        dlp.topMargin = dp(10);
-        card.addView(desc, dlp);
-
-        Button btnBat = new Button(this);
-        btnBat.setText("Excluir de optimización de batería");
-        btnBat.setAllCaps(false);
-        btnBat.setTextSize(16);
-        btnBat.setTextColor(0xFFFFFFFF);
-        btnBat.setTypeface(Typeface.DEFAULT_BOLD);
-        btnBat.setBackground(rounded(ACCENT_BLUE, 16, 0));
-        btnBat.setPadding(dp(18), dp(14), dp(18), dp(14));
-        btnBat.setStateListAnimator(null);
-        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        blp.topMargin = dp(14);
-        btnBat.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                try {
-                    Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
-                    i.setData(Uri.parse("package:" + getPackageName()));
-                    startActivity(i);
-                } catch (Throwable t) {
-                    try {
-                        Intent i = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
-                        startActivity(i);
-                    } catch (Throwable ignored) { }
-                }
-            }
-        });
-        card.addView(btnBat, blp);
-
-        tvLog = new TextView(this);
-        tvLog.setText(logText());
-        tvLog.setTextSize(11);
-        tvLog.setTextColor(0xFF9FD7FF);
-        tvLog.setTypeface(Typeface.MONOSPACE);
-        tvLog.setLineSpacing(dp(2), 1f);
-        LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        llp.topMargin = dp(14);
-        card.addView(tvLog, llp);
-
-        Button btnClear = new Button(this);
-        btnClear.setText("Limpiar registro");
-        btnClear.setAllCaps(false);
-        btnClear.setTextSize(14);
-        btnClear.setTextColor(0xFFFFFFFF);
-        btnClear.setTypeface(Typeface.DEFAULT_BOLD);
-        btnClear.setBackground(rounded(BG_CARD, 16, 0));
-        btnClear.setPadding(dp(18), dp(10), dp(18), dp(10));
-        btnClear.setStateListAnimator(null);
-        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        clp.topMargin = dp(8);
-        btnClear.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                ConnectionLog.clear();
-                tvLog.setText("");
-            }
-        });
-        card.addView(btnClear, clp);
-
-        return card;
-    }
-
     private String logText() {
         StringBuilder sb = new StringBuilder();
         for (String l : ConnectionLog.dump()) sb.append(l).append('\n');
-        if (sb.length() == 0) sb.append("(sin eventos todavía)");
+        if (sb.length() == 0) sb.append("Sin eventos registrados todavía.");
         return sb.toString();
-    }
-
-    // ── Tarjeta de Shizuku ──
-    private View shizukuCard() {
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(rounded(BG_CARD, 24, 0));
-        card.setPadding(dp(22), dp(24), dp(22), dp(24));
-
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-
-        shizukuDot = new View(this);
-        row.addView(shizukuDot, lp(dp(14), dp(14), 0));
-
-        tvShizuku = new TextView(this);
-        tvShizuku.setTextSize(17);
-        tvShizuku.setTextColor(TEXT_MAIN);
-        tvShizuku.setTypeface(Typeface.DEFAULT_BOLD);
-        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        tlp.leftMargin = dp(12);
-        row.addView(tvShizuku, tlp);
-        card.addView(row);
-
-        TextView desc = new TextView(this);
-        desc.setText("Opcional. Con Shizuku, CostPhone hace toques y teclas con "
-                + "permisos de shell en vez de con el servicio de accesibilidad: va más "
-                + "rápido y no se cancela si pierdes el foco. Si no lo usas, todo sigue "
-                + "funcionando exactamente igual.");
-        desc.setTextSize(14);
-        desc.setTextColor(TEXT_DIM);
-        desc.setLineSpacing(dp(4), 1f);
-        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        dlp.topMargin = dp(16);
-        card.addView(desc, dlp);
-
-        btnShizuku = new Button(this);
-        btnShizuku.setAllCaps(false);
-        btnShizuku.setTextSize(16);
-        btnShizuku.setTextColor(0xFFFFFFFF);
-        btnShizuku.setTypeface(Typeface.DEFAULT_BOLD);
-        btnShizuku.setBackground(rounded(ACCENT_BLUE, 16, 0));
-        btnShizuku.setPadding(dp(18), dp(14), dp(18), dp(14));
-        btnShizuku.setStateListAnimator(null);
-        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        blp.topMargin = dp(22);
-        card.addView(btnShizuku, blp);
-
-        return card;
     }
 
     private void refreshShizuku() {
         switch (ShizukuManager.state()) {
             case ShizukuManager.READY:
-                shizukuDot.setBackground(rounded(ACCENT_GREEN, 999, 0));
+                shizukuDot.setBackground(rounded(ACCENT_GREEN, STATUS_RADIUS, 0));
                 tvShizuku.setText("Shizuku activo");
                 tvShizuku.setTextColor(ACCENT_GREEN);
                 btnShizuku.setVisibility(View.GONE);
                 break;
 
             case ShizukuManager.NO_PERMISSION:
-                shizukuDot.setBackground(rounded(ACCENT_AMBER, 999, 0));
-                tvShizuku.setText("Shizuku sin permiso");
+                shizukuDot.setBackground(rounded(ACCENT_AMBER, STATUS_RADIUS, 0));
+                tvShizuku.setText("Falta permiso");
                 tvShizuku.setTextColor(ACCENT_AMBER);
                 btnShizuku.setVisibility(View.VISIBLE);
                 btnShizuku.setText("Pedir permiso");
@@ -447,11 +509,11 @@ public class SettingsActivity extends Activity {
                 break;
 
             default:
-                shizukuDot.setBackground(rounded(ACCENT_RED, 999, 0));
-                tvShizuku.setText("Shizuku no disponible");
+                shizukuDot.setBackground(rounded(TEXT_MUTED, STATUS_RADIUS, 0));
+                tvShizuku.setText("No disponible");
                 tvShizuku.setTextColor(TEXT_DIM);
                 btnShizuku.setVisibility(View.VISIBLE);
-                btnShizuku.setText("Cómo instalarlo");
+                btnShizuku.setText("Cómo instalar");
                 btnShizuku.setOnClickListener(new View.OnClickListener() {
                     @Override public void onClick(View v) {
                         startActivity(new Intent(Intent.ACTION_VIEW,
@@ -460,11 +522,9 @@ public class SettingsActivity extends Activity {
                 });
                 break;
         }
-        // El panel de registro refleja el cambio al instante.
         if (tvLog != null) tvLog.setText(logText());
     }
 
-    // ── Utilidades de UI ──
     private int dp(int v) {
         return (int) (v * getResources().getDisplayMetrics().density);
     }
