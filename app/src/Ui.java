@@ -194,7 +194,12 @@ public final class Ui {
         c.setOrientation(LinearLayout.HORIZONTAL);
         c.setGravity(Gravity.CENTER_VERTICAL);
         c.setPadding(dp(a, 10), dp(a, 4), dp(a, 10), dp(a, 4));
-        c.setBackground(shape(a, colorToken, 999f, null, 0));
+        // relleno translúcido (18%) del propio token → texto legible (>= 4.5:1)
+        GradientDrawable bg = new GradientDrawable();
+        int base = color(a, colorToken);
+        bg.setColor((base & 0x00FFFFFF) | 0x2E000000);
+        bg.setCornerRadius(dp(a, 999f));
+        c.setBackground(bg);
 
         TextView t = new TextView(a);
         t.setText(text);

@@ -60,6 +60,9 @@ public class SettingsActivity extends Activity {
     private View statusDot;
     private TextView tvStatus;
     private TextView tvStatusDesc;
+    private LinearLayout ajustesLogContainer;
+    private LinearLayout ajustesFilterRow;
+    private String logFilter = "all";  // all | servicio | acciones | errores
     private View headerDot;
     private TextView headerStatusText;
 
@@ -1025,29 +1028,17 @@ public class SettingsActivity extends Activity {
         container.removeAllViews();
         List<String[]> routines = loadRoutines();
         if (routines.isEmpty()) {
-            LinearLayout emptyCard = new LinearLayout(this);
-            emptyCard.setOrientation(LinearLayout.VERTICAL);
-            emptyCard.setGravity(Gravity.CENTER);
-            emptyCard.setPadding(dp(16), dp(24), dp(16), dp(24));
-
-            ImageView emptyIcon = new ImageView(this);
-            emptyIcon.setImageResource(R.drawable.ic_routines);
-            emptyIcon.setColorFilter(TEXT_MUTED);
-            emptyCard.addView(emptyIcon, new LinearLayout.LayoutParams(dp(40), dp(40)));
-
-            TextView empty = new TextView(this);
-            empty.setText("No hay rutinas guardadas.\nCrea una con el formulario de abajo.");
-            empty.setTextSize(13);
-            empty.setTextColor(TEXT_MUTED);
-            empty.setGravity(Gravity.CENTER);
-            empty.setMaxLines(2);
-            empty.setEllipsize(TextUtils.TruncateAt.END);
-            LinearLayout.LayoutParams elp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            elp.topMargin = dp(12);
-            emptyCard.addView(empty, elp);
-
-            container.addView(emptyCard);
+            LinearLayout empty = Ui.emptyState(this, R.drawable.ic_routines,
+                    "No hay rutinas guardadas todavía.");
+            View createBtn = Ui.primaryButton(this, R.drawable.ic_plus, "Crear rutina",
+                    new View.OnClickListener() {
+                        @Override public void onClick(View v) { showTab(TAB_RUTINAS); }
+                    });
+            LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            clp.topMargin = dp(16);
+            empty.addView(createBtn, clp);
+            container.addView(empty);
             return;
         }
         for (final String[] routine : routines) {
@@ -1388,8 +1379,17 @@ public class SettingsActivity extends Activity {
     private LinearLayout buildAjustesPanel() {
         LinearLayout panel = createPanel();
 
-        // ── Batería (una sola tarjeta) ──
+        // ── Batería: chip de estado real + acción ──
         LinearLayout batCard = sectionCard("Batería", R.drawable.ic_battery);
+
+        android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
+        boolean excluded = false;
+        if (pm != null && Build.VERSION.SDK_INT >= 23) {
+            excluded = pm.isIgnoringBatteryOptimizations(getPackageName());
+        }
+        batCard.addView(Ui.chip(this, excluded ? "Excluida" : "No excluida",
+                excluded ? "ok" : "aviso"), lpWRAP(0));
+
         TextView batDesc = new TextView(this);
         batDesc.setText("Excluye CostPhone de la optimización de batería para que Android no lo cierre.");
         batDesc.setTextSize(13);
@@ -1417,51 +1417,34 @@ public class SettingsActivity extends Activity {
         batCard.addView(btnBat, cardLp());
         panel.addView(batCard, sectionCardLp());
 
-        // ── Registro de eventos ──
-        LinearLayout logCard = sectionCard("Registro de eventos", R.drawable.ic_clock);
+        // ── Registro: filtros + limpiar (ghost en el título) + filas con icono ──
+        View ghostClear = Ui.ghostButton(this, R.drawable.ic_trash, "Limpiar",
+                new View.OnClickListener() {
+                    @Override public void onClick(View v) {
+                        ConnectionLog.clear();
+                        populateLog();
+                    }
+                });
+        LinearLayout logCard = sectionCard("Registro de eventos", R.drawable.ic_clock, ghostClear);
 
-        // chip "En tiempo real"
-        LinearLayout realtimeChip = new LinearLayout(this);
-        realtimeChip.setOrientation(LinearLayout.HORIZONTAL);
-        realtimeChip.setGravity(Gravity.CENTER_VERTICAL);
-        realtimeChip.setPadding(dp(8), dp(3), dp(8), dp(3));
-        realtimeChip.setBackground(rounded(0x1A1FBF8F, 999, 0));
+        ajustesFilterRow = new LinearLayout(this);
+        ajustesFilterRow.setOrientation(LinearLayout.HORIZONTAL);
+        ajustesFilterRow.setGravity(Gravity.CENTER_VERTICAL);
+        ajustesFilterRow.addView(filterChip("Todo", "all"), lpWRAP(0));
+        ajustesFilterRow.addView(filterChip("Servicio", "servicio"), lpWRAP(0));
+        ajustesFilterRow.addView(filterChip("Acciones", "acciones"), lpWRAP(0));
+        ajustesFilterRow.addView(filterChip("Errores", "errores"), lpWRAP(0));
+        LinearLayout.LayoutParams flp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        flp.bottomMargin = dp(8);
+        logCard.addView(ajustesFilterRow, flp);
 
-        View rtDot = new View(this);
-        rtDot.setBackground(rounded(ACCENT_GREEN, 999, 0));
-        realtimeChip.addView(rtDot, lp(dp(6), dp(6), 0));
-
-        TextView rtText = new TextView(this);
-        rtText.setText("En tiempo real");
-        rtText.setTextSize(11);
-        rtText.setTextColor(ACCENT_GREEN);
-        rtText.setTypeface(Typeface.DEFAULT_BOLD);
-        LinearLayout.LayoutParams rtTlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        rtTlp.leftMargin = dp(6);
-        realtimeChip.addView(rtText, rtTlp);
-
-        LinearLayout.LayoutParams rtLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        rtLp.bottomMargin = dp(8);
-        logCard.addView(realtimeChip, rtLp);
-
-        // registro con puntos de color por tipo
-        LinearLayout logContainer = new LinearLayout(this);
-        logContainer.setOrientation(LinearLayout.VERTICAL);
-        logContainer.setPadding(dp(12), dp(10), dp(12), dp(10));
-        logContainer.setBackground(rounded(LOG_BG, 8, 0));
-        populateLog(logContainer);
-        logCard.addView(logContainer, cardLp());
-
-        Button btnClearLog = iconButton("Limpiar registro", R.drawable.ic_trash, false);
-        btnClearLog.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                ConnectionLog.clear();
-                populateLog(logContainer);
-            }
-        });
-        logCard.addView(btnClearLog, cardLp());
+        ajustesLogContainer = new LinearLayout(this);
+        ajustesLogContainer.setOrientation(LinearLayout.VERTICAL);
+        ajustesLogContainer.setPadding(dp(12), dp(10), dp(12), dp(10));
+        ajustesLogContainer.setBackground(Ui.shape(this, "surface2", 14f, "border", 1f));
+        populateLog();
+        logCard.addView(ajustesLogContainer, cardLp());
 
         panel.addView(logCard, sectionCardLp());
 
@@ -1494,58 +1477,103 @@ public class SettingsActivity extends Activity {
         return panel;
     }
 
-    private void populateLog(LinearLayout container) {
-        container.removeAllViews();
-        List<String> lines = ConnectionLog.dump();
-        if (lines.isEmpty()) {
-            TextView empty = new TextView(this);
-            empty.setText("Sin eventos registrados todavía.");
-            empty.setTextSize(12);
-            empty.setTextColor(TEXT_MUTED);
-            empty.setPadding(dp(4), dp(4), dp(4), dp(4));
-            container.addView(empty);
-            return;
-        }
-        for (String line : lines) {
-            LinearLayout row = new LinearLayout(this);
-            row.setOrientation(LinearLayout.HORIZONTAL);
-            row.setGravity(Gravity.CENTER_VERTICAL);
-            row.setPadding(dp(2), dp(2), dp(2), dp(2));
+    private View filterChip(String label, final String key) {
+        final TextView chip = new TextView(this);
+        chip.setText(label);
+        chip.setTextSize(12);
+        chip.setTypeface(Typeface.DEFAULT_BOLD);
+        chip.setPadding(dp(14), dp(8), dp(14), dp(8));
+        chip.setGravity(Gravity.CENTER);
+        chip.setMinHeight(dp(40));
+        chip.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                logFilter = key;
+                restyleFilterChips();
+                populateLog();
+            }
+        });
+        styleFilterChip(chip, key);
+        return chip;
+    }
 
-            View dot = new View(this);
-            int dotColor = logColorFor(line);
-            dot.setBackground(rounded(dotColor, 999, 0));
-            row.addView(dot, lp(dp(8), dp(8), 0));
+    private void styleFilterChip(TextView chip, String key) {
+        boolean active = logFilter.equals(key);
+        String token = active ? "accent" : "text3";
+        chip.setTextColor(Ui.color(this, active ? "on_accent" : token));
+        chip.setBackground(Ui.shape(this, active ? "accent" : "surface2",
+                999f, active ? null : "border", active ? 0f : 1f));
+    }
 
-            TextView tv = new TextView(this);
-            tv.setText(line);
-            tv.setTextSize(11);
-            tv.setTextColor(TEXT_DIM);
-            tv.setTypeface(Typeface.MONOSPACE);
-            tv.setMaxLines(2);
-            tv.setEllipsize(TextUtils.TruncateAt.END);
-            LinearLayout.LayoutParams tvlp = new LinearLayout.LayoutParams(
-                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-            tvlp.leftMargin = dp(8);
-            row.addView(tv, tvlp);
-
-            container.addView(row);
+    private void restyleFilterChips() {
+        if (ajustesFilterRow == null) return;
+        for (int i = 0; i < ajustesFilterRow.getChildCount(); i++) {
+            View child = ajustesFilterRow.getChildAt(i);
+            if (child instanceof TextView) {
+                String label = ((TextView) child).getText().toString();
+                String key = label.equals("Todo") ? "all"
+                        : label.equals("Servicio") ? "servicio"
+                        : label.equals("Acciones") ? "acciones" : "errores";
+                styleFilterChip((TextView) child, key);
+            }
         }
     }
 
-    private int logColorFor(String line) {
+    private void populateLog() {
+        if (ajustesLogContainer == null) return;
+        ajustesLogContainer.removeAllViews();
+        List<String> lines = filteredLog();
+        if (lines.isEmpty()) {
+            TextView empty = new TextView(this);
+            empty.setText("Sin eventos en este filtro.");
+            empty.setTextSize(12);
+            empty.setTextColor(TEXT_MUTED);
+            empty.setPadding(dp(4), dp(4), dp(4), dp(4));
+            ajustesLogContainer.addView(empty);
+            return;
+        }
+        for (String line : lines) {
+            String hora = line.length() >= 8 ? line.substring(0, 8) : "";
+            String msg = line.length() > 10 ? line.substring(10) : line;
+            ajustesLogContainer.addView(
+                    Ui.logRow(this, logTypeName(logKindFor(line)), hora, msg), lpMATCH(0));
+        }
+    }
+
+    private List<String> filteredLog() {
+        List<String> all = ConnectionLog.dump();
+        if (logFilter.equals("all")) return all;
+        List<String> out = new ArrayList<>();
+        for (String line : all) {
+            int kind = logKindFor(line);
+            if (logFilter.equals("servicio") && kind == 0) out.add(line);
+            else if (logFilter.equals("acciones") && kind == 1) out.add(line);
+            else if (logFilter.equals("errores") && kind == 2) out.add(line);
+        }
+        return out;
+    }
+
+    /** 0 = servicio, 1 = acciones, 2 = errores, 3 = aviso, 4 = otros */
+    private int logKindFor(String line) {
         String lower = line.toLowerCase();
         if (lower.contains("desconect") || lower.contains("disconnect") || lower.contains("error") || lower.contains("fail"))
-            return ACCENT_RED;
+            return 2;
         if (lower.contains("aviso") || lower.contains("warning"))
-            return ACCENT_AMBER;
-        if (lower.contains("notific"))
-            return ACCENT_GREEN;
+            return 3;
+        if (lower.contains("servicio") || lower.contains("service") || lower.contains("conectado") || lower.contains("notific"))
+            return 0;
         if (lower.contains("ui envió") || lower.contains("ui envio") || lower.contains("action"))
-            return ACCENT_VIOLET;
-        if (lower.contains("servicio") || lower.contains("service") || lower.contains("conectado"))
-            return 0xFF3B9BFF; // info blue
-        return TEXT_MUTED;
+            return 1;
+        return 4;
+    }
+
+    private String logTypeName(int kind) {
+        switch (kind) {
+            case 0: return "info";
+            case 1: return "ok";
+            case 2: return "error";
+            case 3: return "aviso";
+            default: return "text3";
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -1990,6 +2018,16 @@ public class SettingsActivity extends Activity {
         chip.addView(btnShizuku);
 
         return chip;
+    }
+
+    private LinearLayout sectionCard(String title, int iconRes, View trailing) {
+        LinearLayout card = sectionCard(title, iconRes);
+        LinearLayout header = (LinearLayout) card.getChildAt(0);
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        tlp.leftMargin = dp(8);
+        header.addView(trailing, tlp);
+        return card;
     }
 
     private LinearLayout sectionCard(String title, int iconRes) {
