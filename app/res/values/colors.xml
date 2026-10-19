@@ -7,7 +7,7 @@
     <color name="border">#1D3250</color>
     <color name="text">#EAF1FB</color>
     <color name="text2">#9DB0CC</color>
-    <color name="text3">#6B7F9F</color>
+    <color name="text3">#7A8EAE</color>
     <color name="accent">#2DE2C0</color>
     <color name="accent2">#8B5CF6</color>
     <color name="accent2_text">#A78BFA</color>
@@ -26,7 +26,7 @@
     <color name="bg_header">#060B14</color>
     <color name="text_main">#EAF1FB</color>
     <color name="text_dim">#9DB0CC</color>
-    <color name="text_muted">#6B7F9F</color>
+    <color name="text_muted">#7A8EAE</color>
     <color name="text_log">#9DB0CC</color>
     <color name="log_bg">#0D1828</color>
     <color name="divider">#1D3250</color>

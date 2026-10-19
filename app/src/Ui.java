@@ -234,7 +234,7 @@ public final class Ui {
         v.setMaxLines(2);
         v.setEllipsize(TextUtils.TruncateAt.END);
         LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         vlp.topMargin = dp(a, 6);
         tile.addView(v, vlp);
 
@@ -321,7 +321,7 @@ public final class Ui {
         t.setMaxLines(3);
         t.setEllipsize(TextUtils.TruncateAt.END);
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         tlp.topMargin = dp(a, 12);
         e.addView(t, tlp);
 

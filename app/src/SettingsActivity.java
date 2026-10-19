@@ -60,6 +60,9 @@ public class SettingsActivity extends Activity {
     private View statusDot;
     private TextView tvStatus;
     private TextView tvStatusDesc;
+    private LinearLayout statusCardRef;
+    private ImageView heroStatusIcon;
+    private int a11yBtnIndex = -1;
     private LinearLayout ajustesLogContainer;
     private LinearLayout ajustesFilterRow;
     private String logFilter = "all";  // all | servicio | acciones | errores
@@ -154,7 +157,7 @@ public class SettingsActivity extends Activity {
         contentArea.addView(panelRutinas);
         contentArea.addView(panelAjustes);
 
-        View tabBar = buildTabBar();
+        final View tabBar = buildTabBar();
         root.addView(tabBar, lpMATCH(0));
 
         android.widget.FrameLayout.LayoutParams outerLp = new android.widget.FrameLayout.LayoutParams(
@@ -187,6 +190,22 @@ public class SettingsActivity extends Activity {
                 }
             }
         });
+
+        // Ocultar barra inferior cuando el teclado está abierto
+        root.getViewTreeObserver().addOnGlobalLayoutListener(
+                new android.view.ViewTreeObserver.OnGlobalLayoutListener() {
+                    private final int threshold = dp(150);
+                    @Override public void onGlobalLayout() {
+                        android.graphics.Rect r = new android.graphics.Rect();
+                        root.getWindowVisibleDisplayFrame(r);
+                        // pantalla completa visible vs área visible (barra+teclado)
+                        int screenH = root.getResources().getDisplayMetrics().heightPixels;
+                        int covered = screenH - (r.bottom - r.top);
+                        boolean keyboardOpen = covered > threshold;
+                        int want = keyboardOpen ? View.GONE : View.VISIBLE;
+                        if (tabBar.getVisibility() != want) tabBar.setVisibility(want);
+                    }
+                });
 
         // insets de barras del sistema (minSdk 24 → API directa)
         root.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
@@ -385,6 +404,8 @@ public class SettingsActivity extends Activity {
         textBlock.addView(tvStatusDesc, dlp);
 
         statusCard.addView(heroRow);
+        heroStatusIcon = heroIcon;
+        statusCardRef = statusCard;
 
         // dot oculto para compatibilidad con refreshStatus (statusDot)
         statusDot = new View(this);
@@ -392,26 +413,11 @@ public class SettingsActivity extends Activity {
         statusCard.addView(statusDot, lp(0, 0, 0));
 
         // botón: ghost si conectado, primario si no
-        final boolean connected = serviceState() == 2;
-        View a11yBtn;
-        if (connected) {
-            a11yBtn = Ui.ghostButton(this, R.drawable.ic_accessibility, "Ajustes de accesibilidad",
-                    new View.OnClickListener() {
-                        @Override public void onClick(View v) {
-                            startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
-                        }
-                    });
-        } else {
-            a11yBtn = Ui.primaryButton(this, R.drawable.ic_accessibility, "Activar accesibilidad",
-                    new View.OnClickListener() {
-                        @Override public void onClick(View v) {
-                            startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
-                        }
-                    });
-        }
+        View a11yBtn = a11yButton(serviceState() == 2);
         LinearLayout.LayoutParams ablp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         ablp.topMargin = dp(16);
+        a11yBtnIndex = statusCard.getChildCount();
         statusCard.addView(a11yBtn, ablp);
 
         panel.addView(statusCard, lpMATCH(12));
@@ -510,6 +516,18 @@ public class SettingsActivity extends Activity {
         return panel;
     }
 
+    private View a11yButton(boolean connected) {
+        final View.OnClickListener go = new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+            }
+        };
+        if (connected) {
+            return Ui.ghostButton(this, R.drawable.ic_accessibility, "Ajustes de accesibilidad", go);
+        }
+        return Ui.primaryButton(this, R.drawable.ic_accessibility, "Activar accesibilidad", go);
+    }
+
     private View actionTile(String label, int iconRes, View.OnClickListener onClick) {
         LinearLayout tile = new LinearLayout(this);
         tile.setOrientation(LinearLayout.VERTICAL);
@@ -573,6 +591,7 @@ public class SettingsActivity extends Activity {
         etX.setBackground(rounded(BG_INPUT, 10, DIVIDER));
         etX.setSingleLine();
         etX.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        etX.setMinHeight(dp(48));
         gesturesCard.addView(etX, cardLp());
 
         final EditText etY = new EditText(this);
@@ -583,6 +602,7 @@ public class SettingsActivity extends Activity {
         etY.setBackground(rounded(BG_INPUT, 10, DIVIDER));
         etY.setSingleLine();
         etY.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        etY.setMinHeight(dp(48));
         gesturesCard.addView(etY, cardLp());
 
         LinearLayout gestures = new LinearLayout(this);
@@ -733,6 +753,7 @@ public class SettingsActivity extends Activity {
         etElement.setPadding(dp(14), dp(12), dp(14), dp(12));
         etElement.setBackground(rounded(BG_INPUT, 10, DIVIDER));
         etElement.setSingleLine();
+        etElement.setMinHeight(dp(48));
         elemCard.addView(etElement, cardLp());
 
         LinearLayout elemRow = new LinearLayout(this);
@@ -891,6 +912,7 @@ public class SettingsActivity extends Activity {
         etInspectorSearch.setPadding(dp(14), dp(12), dp(14), dp(12));
         etInspectorSearch.setBackground(rounded(BG_INPUT, 10, DIVIDER));
         etInspectorSearch.setSingleLine();
+        etInspectorSearch.setMinHeight(dp(48));
         findCard.addView(etInspectorSearch, cardLp());
 
         Button btnFind = iconButton("Buscar y hacer click", R.drawable.ic_search, true);
@@ -1056,9 +1078,14 @@ public class SettingsActivity extends Activity {
             tvName.setTextSize(14);
             tvName.setTextColor(TEXT_MAIN);
             tvName.setTypeface(Typeface.DEFAULT_BOLD);
+            tvName.setMaxLines(1);
+            tvName.setEllipsize(TextUtils.TruncateAt.END);
             LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
                     0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
             row.addView(tvName, tlp);
+
+            LinearLayout btnRow = new LinearLayout(this);
+            btnRow.setOrientation(LinearLayout.HORIZONTAL);
 
             Button btnEdit = new Button(this);
             btnEdit.setText("Ver/Editar");
@@ -1067,12 +1094,13 @@ public class SettingsActivity extends Activity {
             btnEdit.setTextColor(0xFFFFFFFF);
             btnEdit.setBackground(rounded(ACCENT_BLUE, 8, 0));
             btnEdit.setPadding(dp(10), dp(6), dp(10), dp(6));
+            btnEdit.setMinimumHeight(dp(48));
             btnEdit.setOnClickListener(new View.OnClickListener() {
                 @Override public void onClick(View v) {
                     showRoutineEditor(routine);
                 }
             });
-            row.addView(btnEdit);
+            btnRow.addView(btnEdit);
 
             Button btnRun = new Button(this);
             btnRun.setText("Ejecutar");
@@ -1081,12 +1109,13 @@ public class SettingsActivity extends Activity {
             btnRun.setTextColor(0xFFFFFFFF);
             btnRun.setBackground(rounded(ACCENT_GREEN, 8, 0));
             btnRun.setPadding(dp(10), dp(6), dp(10), dp(6));
+            btnRun.setMinimumHeight(dp(48));
             btnRun.setOnClickListener(new View.OnClickListener() {
                 @Override public void onClick(View v) {
                     executeRoutine(routine);
                 }
             });
-            row.addView(btnRun);
+            btnRow.addView(btnRun);
 
             Button btnDelete = new Button(this);
             btnDelete.setText("Eliminar");
@@ -1095,6 +1124,7 @@ public class SettingsActivity extends Activity {
             btnDelete.setTextColor(ACCENT_RED);
             btnDelete.setBackground(rounded(BG_CARD_ALT, 8, 0));
             btnDelete.setPadding(dp(10), dp(6), dp(10), dp(6));
+            btnDelete.setMinimumHeight(dp(48));
             btnDelete.setOnClickListener(new View.OnClickListener() {
                 @Override public void onClick(View v) {
                     new android.app.AlertDialog.Builder(SettingsActivity.this)
@@ -1110,9 +1140,14 @@ public class SettingsActivity extends Activity {
                             .show();
                 }
             });
-            row.addView(btnDelete);
+            btnRow.addView(btnDelete);
 
             card.addView(row);
+
+            LinearLayout.LayoutParams brlp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            brlp.topMargin = dp(8);
+            card.addView(btnRow, brlp);
 
             for (int i = 1; i < routine.length; i += 2) {
                 String action = routine[i];
@@ -1122,6 +1157,8 @@ public class SettingsActivity extends Activity {
                 step.setTextSize(12);
                 step.setTextColor(TEXT_DIM);
                 step.setPadding(dp(16), dp(4), dp(16), dp(4));
+                step.setMaxLines(2);
+                step.setEllipsize(TextUtils.TruncateAt.END);
                 card.addView(step);
             }
 
@@ -1484,7 +1521,7 @@ public class SettingsActivity extends Activity {
         chip.setTypeface(Typeface.DEFAULT_BOLD);
         chip.setPadding(dp(14), dp(8), dp(14), dp(8));
         chip.setGravity(Gravity.CENTER);
-        chip.setMinHeight(dp(40));
+        chip.setMinHeight(dp(48));
         chip.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 logFilter = key;
@@ -1813,6 +1850,18 @@ public class SettingsActivity extends Activity {
             headerDot.setBackground(rounded(color, 999, 0));
             headerStatusText.setText(text);
         }
+        if (heroStatusIcon != null) {
+            heroStatusIcon.setImageResource(state == 2
+                    ? R.drawable.ic_connected : R.drawable.ic_disconnected);
+            heroStatusIcon.setColorFilter(color);
+        }
+        if (statusCardRef != null && a11yBtnIndex >= 0
+                && a11yBtnIndex < statusCardRef.getChildCount()) {
+            View old = statusCardRef.getChildAt(a11yBtnIndex);
+            android.view.ViewGroup.LayoutParams blp = old.getLayoutParams();
+            statusCardRef.removeViewAt(a11yBtnIndex);
+            statusCardRef.addView(a11yButton(state == 2), a11yBtnIndex, blp);
+        }
     }
 
     private int serviceState() {
@@ -2013,7 +2062,8 @@ public class SettingsActivity extends Activity {
         btnShizuku.setTextColor(0xFFFFFFFF);
         btnShizuku.setTypeface(Typeface.DEFAULT_BOLD);
         btnShizuku.setBackground(rounded(ACCENT_BLUE, 8, 0));
-        btnShizuku.setPadding(dp(10), dp(4), dp(10), dp(4));
+        btnShizuku.setPadding(dp(14), dp(12), dp(14), dp(12));
+        btnShizuku.setMinimumHeight(dp(48));
         btnShizuku.setStateListAnimator(null);
         chip.addView(btnShizuku);
 
