@@ -2,10 +2,13 @@ package com.accessdroid.termux;
 
 import android.accessibilityservice.AccessibilityServiceInfo;
 import android.app.Activity;
+import android.content.ComponentName;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.view.Gravity;
@@ -167,7 +170,7 @@ public class SettingsActivity extends Activity {
         root.addView(tip, lpWRAP(24));
 
         TextView ver = new TextView(this);
-        ver.setText("CostPhone · v1.2");
+        ver.setText("CostPhone · v" + versionName());
         ver.setTextSize(12);
         ver.setTextColor(0xFF546E7A);
         ver.setGravity(Gravity.CENTER);
@@ -192,28 +195,78 @@ public class SettingsActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
+        requestNotificationPermission();
         refreshStatus();
         refreshShizuku();
     }
 
-    private void refreshStatus() {
-        boolean on = isServiceOn();
-        statusDot.setBackground(rounded(on ? ACCENT_GREEN : ACCENT_RED, 999, 0));
-        tvStatus.setText(on ? "Servicio activo" : "Servicio desactivado");
-        tvStatus.setTextColor(on ? ACCENT_GREEN : ACCENT_RED);
+    private static final int REQ_POST_NOTIFICATIONS = 42;
+
+    private void requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT < 33) return;
+        if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                == PackageManager.PERMISSION_GRANTED) return;
+        try {
+            requestPermissions(
+                    new String[]{android.Manifest.permission.POST_NOTIFICATIONS},
+                    REQ_POST_NOTIFICATIONS);
+        } catch (Throwable ignored) { }
     }
 
-    private boolean isServiceOn() {
-        AccessibilityManager am =
-                (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
-        if (am == null) return false;
-        List<AccessibilityServiceInfo> list =
-                am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK);
-        for (AccessibilityServiceInfo info : list) {
-            String id = info.getId();
-            if (id != null && id.contains(getPackageName())) return true;
+    private void refreshStatus() {
+        int state = serviceState();
+        int color;
+        String text;
+        switch (state) {
+            case 2:
+                color = ACCENT_GREEN;
+                text = "Servicio conectado";
+                break;
+            case 1:
+                color = ACCENT_AMBER;
+                text = "Servicio habilitado, sin conectar";
+                break;
+            default:
+                color = ACCENT_RED;
+                text = "Servicio desactivado";
+                break;
+        }
+        statusDot.setBackground(rounded(color, 999, 0));
+        tvStatus.setText(text);
+        tvStatus.setTextColor(color);
+    }
+
+    /**
+     * 0 = apagado, 1 = habilitado pero sin conectar, 2 = conectado.
+     * Compara con ComponentName.unflattenFromString porque el sistema puede
+     * guardar el nombre en forma corta (.AccessibilityServiceImpl) o completa.
+     */
+    private int serviceState() {
+        if (!isServiceEnabled()) return 0;
+        if (AccessibilityServiceImpl.sInstance != null
+                && AccessibilityServiceImpl.sInstance.isConnected()) return 2;
+        return 1;
+    }
+
+    private boolean isServiceEnabled() {
+        String flat = Settings.Secure.getString(getContentResolver(),
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        if (flat == null || flat.isEmpty()) return false;
+        ComponentName me = new ComponentName(this, AccessibilityServiceImpl.class);
+        for (String s : flat.split(":")) {
+            ComponentName cn = ComponentName.unflattenFromString(s);
+            if (cn == null) continue;
+            if (cn.equals(me)) return true;
         }
         return false;
+    }
+
+    private String versionName() {
+        try {
+            return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (Throwable t) {
+            return "?";
+        }
     }
 
     private View batteryAndLogCard() {
