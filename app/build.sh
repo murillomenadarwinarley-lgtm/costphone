@@ -227,6 +227,7 @@ SRCS=(
     "src/SettingsActivity.java"
     "src/ShizukuManager.java"
     "src/ShizukuShellService.java"
+    "src/Ui.java"
 )
 
 # RJAVADIR no usado directamente; las fuentes van como argumentos individuales

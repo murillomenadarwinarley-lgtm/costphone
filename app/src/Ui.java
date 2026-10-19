@@ -3,6 +3,7 @@ package com.accessdroid.termux;
 import android.app.Activity;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.os.Build;
@@ -41,9 +42,10 @@ public final class Ui {
         return g;
     }
 
-    public static RippleDrawable ripple(Activity a, View bg, int fgColor) {
+    /** Ripple con contenido y/o máscara (máscara define el área si content es null). */
+    public static RippleDrawable ripple(Activity a, Drawable content, Drawable mask, int fgColor) {
         if (Build.VERSION.SDK_INT >= 21) {
-            return new RippleDrawable(android.content.res.ColorStateList.valueOf(fgColor), bg, null);
+            return new RippleDrawable(android.content.res.ColorStateList.valueOf(fgColor), content, mask);
         }
         // fallback: sin ripple en API < 21 (minSdk 24 → nunca ocurre)
         return null;
@@ -102,7 +104,7 @@ public final class Ui {
                 GradientDrawable.Orientation.LEFT_RIGHT,
                 new int[]{color(a, "accent"), color(a, "accent")});
         bg.setCornerRadius(dp(a, 14));
-        b.setBackground(bg);
+        b.setBackground(ripple(a, bg, null, color(a, "accent_primary_dark")));
 
         if (iconRes != 0) {
             ImageView iv = new ImageView(a);
@@ -136,7 +138,7 @@ public final class Ui {
         GradientDrawable bg = shape(a, "surface2", 14f, null, 0);
         int accent = color(a, "accent");
         bg.setStroke(dp(a, 1), (accent & 0x00FFFFFF) | 0x66000000);
-        b.setBackground(bg);
+        b.setBackground(ripple(a, bg, null, (accent & 0x00FFFFFF) | 0x33000000));
 
         if (iconRes != 0) {
             ImageView iv = new ImageView(a);
@@ -166,6 +168,8 @@ public final class Ui {
         b.setGravity(Gravity.CENTER);
         b.setMinimumHeight(dp(a, 48));
         b.setPadding(dp(a, 16), dp(a, 12), dp(a, 16), dp(a, 12));
+        b.setBackground(ripple(a, null, shape(a, "surface", 14f, null, 0),
+                color(a, "accent")));
 
         if (iconRes != 0) {
             ImageView iv = new ImageView(a);

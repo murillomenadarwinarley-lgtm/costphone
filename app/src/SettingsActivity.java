@@ -1858,7 +1858,7 @@ public class SettingsActivity extends Activity {
         if (statusCardRef != null && a11yBtnIndex >= 0
                 && a11yBtnIndex < statusCardRef.getChildCount()) {
             View old = statusCardRef.getChildAt(a11yBtnIndex);
-            android.view.ViewGroup.LayoutParams blp = old.getLayoutParams();
+            LinearLayout.LayoutParams blp = (LinearLayout.LayoutParams) old.getLayoutParams();
             statusCardRef.removeViewAt(a11yBtnIndex);
             statusCardRef.addView(a11yButton(state == 2), a11yBtnIndex, blp);
         }
@@ -2127,12 +2127,17 @@ public class SettingsActivity extends Activity {
         b.setTextSize(13);
         b.setTextColor(0xFFFFFFFF);
         b.setTypeface(Typeface.DEFAULT_BOLD);
-        b.setBackground(getResources().getDrawable(
-                primary ? R.drawable.bg_button_primary : R.drawable.bg_button_secondary));
+        b.setBackground(Ui.ripple(this, getResources().getDrawable(
+                        primary ? R.drawable.bg_button_primary : R.drawable.bg_button_secondary),
+                null,
+                primary ? Ui.color(this, "accent_primary_dark")
+                        : (ACCENT_GREEN & 0x00FFFFFF) | 0x33000000));
         b.setPadding(dp(8), dp(10), dp(8), dp(10));
         b.setStateListAnimator(null);
         b.setMinimumHeight(dp(48));
-        if (!primary) b.setTextColor(ACCENT_GREEN);
+        // primario: texto on_accent (oscuro) sobre turquesa; secundario: acento
+        if (primary) b.setTextColor(Ui.color(this, "on_accent"));
+        else b.setTextColor(ACCENT_GREEN);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         lp.leftMargin = dp(3);
