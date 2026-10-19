@@ -160,15 +160,19 @@ public class SettingsActivity extends Activity {
             @Override public void onLayoutChange(View v, int l, int t, int r, int b,
                                                  int ol, int ot, int or, int ob) {
                 int w = r - l;
-                if (w > maxWidthPx) {
-                    android.view.ViewGroup.LayoutParams lp = v.getLayoutParams();
-                    if (lp instanceof android.widget.FrameLayout.LayoutParams) {
-                        android.widget.FrameLayout.LayoutParams flp =
-                                (android.widget.FrameLayout.LayoutParams) lp;
-                        flp.width = maxWidthPx;
-                        flp.gravity = Gravity.CENTER_HORIZONTAL;
-                        v.setLayoutParams(flp);
-                    }
+                android.view.ViewGroup.LayoutParams lp = v.getLayoutParams();
+                if (!(lp instanceof android.widget.FrameLayout.LayoutParams)) return;
+                android.widget.FrameLayout.LayoutParams flp =
+                        (android.widget.FrameLayout.LayoutParams) lp;
+                // Solo tocar LayoutParams si el valor realmente cambia (evita bucles).
+                if (w > maxWidthPx && flp.width != maxWidthPx) {
+                    flp.width = maxWidthPx;
+                    flp.gravity = Gravity.CENTER_HORIZONTAL;
+                    v.setLayoutParams(flp);
+                } else if (w <= maxWidthPx && flp.width != android.widget.FrameLayout.LayoutParams.MATCH_PARENT) {
+                    flp.width = android.widget.FrameLayout.LayoutParams.MATCH_PARENT;
+                    flp.gravity = Gravity.CENTER_HORIZONTAL;
+                    v.setLayoutParams(flp);
                 }
             }
         });

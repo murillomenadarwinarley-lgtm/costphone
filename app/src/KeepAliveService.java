@@ -26,7 +26,8 @@ import android.util.Log;
 public class KeepAliveService extends Service {
 
     private static final String TAG = "CostPhone";
-    public static final String CHANNEL_ID = "costphone_keep";
+    public static final String CHANNEL_ID = "costphone_remote_v2";
+    private static final String OLD_CHANNEL_ID = "costphone_keep";
     public static final int NOTIF_ID = 1001;
 
     @Override public void onCreate() {
@@ -54,8 +55,10 @@ public class KeepAliveService extends Service {
         if (Build.VERSION.SDK_INT < 26) return;
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (nm == null) return;
-        // IMPORTANCE_LOW: silenciosa. Es una notificación de "fondo", no tiene
-        // que molestar con sonido ni vibración.
+        // Borrar canal anterior si existe (migración de costphone_keep → costphone_remote_v2).
+        if (nm.getNotificationChannel(OLD_CHANNEL_ID) != null) {
+            nm.deleteNotificationChannel(OLD_CHANNEL_ID);
+        }
         if (nm.getNotificationChannel(CHANNEL_ID) != null) return;
         NotificationChannel ch = new NotificationChannel(
                 CHANNEL_ID, "Control remoto de CostPhone", NotificationManager.IMPORTANCE_LOW);
