@@ -1964,33 +1964,6 @@ public class SettingsActivity extends Activity {
         return tv;
     }
 
-    private LinearLayout.LayoutParams sectionLp() {
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = dp(8);
-        return lp;
-    }
-
-    private Button controlButton(String label) {
-        Button b = new Button(this);
-        b.setText(label);
-        b.setAllCaps(false);
-        b.setTextSize(13);
-        b.setTextColor(0xFFFFFFFF);
-        b.setTypeface(Typeface.DEFAULT_BOLD);
-        b.setBackground(rounded(ACCENT_BLUE, 10, 0));
-        b.setPadding(dp(8), dp(10), dp(8), dp(10));
-        b.setStateListAnimator(null);
-        b.setMinimumHeight(dp(48));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-        lp.leftMargin = dp(3);
-        lp.rightMargin = dp(3);
-        b.setLayoutParams(lp);
-        return b;
-    }
-
     private LinearLayout.LayoutParams controlLp() {
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
