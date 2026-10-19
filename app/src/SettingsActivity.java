@@ -340,117 +340,199 @@ public class SettingsActivity extends Activity {
         // chip Shizuku (antes barra fija en header)
         panel.addView(shizukuChip(), lpMATCH(0));
 
-        // tarjeta de estado de accesibilidad
-        LinearLayout statusCard = new LinearLayout(this);
-        statusCard.setOrientation(LinearLayout.VERTICAL);
-        statusCard.setBackground(getResources().getDrawable(R.drawable.bg_card));
-        statusCard.setPadding(dp(20), dp(20), dp(20), dp(20));
+        // ── Tarjeta de estado grande: icono en aro + Conectado + descripción ──
+        LinearLayout statusCard = Ui.card(this);
 
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout heroRow = new LinearLayout(this);
+        heroRow.setOrientation(LinearLayout.HORIZONTAL);
+        heroRow.setGravity(Gravity.CENTER_VERTICAL);
 
-        statusDot = new View(this);
-        row.addView(statusDot, lp(dp(16), dp(16), 0));
+        // icono en aro
+        LinearLayout ring = new LinearLayout(this);
+        ring.setGravity(Gravity.CENTER);
+        ring.setBackground(Ui.shape(this, "surface2", 999f, "border", 2f));
+        ImageView heroIcon = new ImageView(this);
+        heroIcon.setImageResource(R.drawable.ic_connected);
+        heroIcon.setColorFilter(ACCENT_GREEN);
+        ring.addView(heroIcon, new LinearLayout.LayoutParams(dp(32), dp(32)));
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(dp(64), dp(64));
+        heroRow.addView(ring, rlp);
+
+        LinearLayout textBlock = new LinearLayout(this);
+        textBlock.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams tblp = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        tblp.leftMargin = dp(16);
+        heroRow.addView(textBlock, tblp);
 
         tvStatus = new TextView(this);
-        tvStatus.setTextSize(18);
+        tvStatus.setTextSize(20);
         tvStatus.setTextColor(TEXT_MAIN);
         tvStatus.setTypeface(Typeface.DEFAULT_BOLD);
-        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        tlp.leftMargin = dp(12);
-        row.addView(tvStatus, tlp);
-        statusCard.addView(row);
+        textBlock.addView(tvStatus);
 
         tvStatusDesc = new TextView(this);
         tvStatusDesc.setTextSize(13);
         tvStatusDesc.setTextColor(TEXT_DIM);
-        tvStatusDesc.setLineSpacing(dp(5), 1f);
         tvStatusDesc.setMaxLines(3);
         tvStatusDesc.setEllipsize(TextUtils.TruncateAt.END);
         LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        dlp.topMargin = dp(12);
-        statusCard.addView(tvStatusDesc, dlp);
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        dlp.topMargin = dp(4);
+        textBlock.addView(tvStatusDesc, dlp);
 
-        Button btnAccessibility = new Button(this);
-        btnAccessibility.setText("Abrir ajustes de accesibilidad");
-        btnAccessibility.setAllCaps(false);
-        btnAccessibility.setTextSize(15);
-        btnAccessibility.setTextColor(0xFFFFFFFF);
-        btnAccessibility.setTypeface(Typeface.DEFAULT_BOLD);
-        btnAccessibility.setBackground(rounded(ACCENT_BLUE, 12, 0));
-        btnAccessibility.setPadding(dp(18), dp(14), dp(18), dp(14));
-        btnAccessibility.setStateListAnimator(null);
-        btnAccessibility.setMinimumHeight(dp(48));
-        btnAccessibility.setOnClickListener(new View.OnClickListener() {
+        statusCard.addView(heroRow);
+
+        // dot oculto para compatibilidad con refreshStatus (statusDot)
+        statusDot = new View(this);
+        statusDot.setVisibility(View.GONE);
+        statusCard.addView(statusDot, lp(0, 0, 0));
+
+        // botón: ghost si conectado, primario si no
+        final boolean connected = serviceState() == 2;
+        View a11yBtn;
+        if (connected) {
+            a11yBtn = Ui.ghostButton(this, R.drawable.ic_accessibility, "Ajustes de accesibilidad",
+                    new View.OnClickListener() {
+                        @Override public void onClick(View v) {
+                            startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+                        }
+                    });
+        } else {
+            a11yBtn = Ui.primaryButton(this, R.drawable.ic_accessibility, "Activar accesibilidad",
+                    new View.OnClickListener() {
+                        @Override public void onClick(View v) {
+                            startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+                        }
+                    });
+        }
+        LinearLayout.LayoutParams ablp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        ablp.topMargin = dp(16);
+        statusCard.addView(a11yBtn, ablp);
+
+        panel.addView(statusCard, lpMATCH(12));
+
+        // ── Cuadrícula 2x2 de statTiles con datos REALES ──
+        panel.addView(Ui.sectionHeader(this, R.drawable.ic_pulse, "Estado"), lpMATCH(4));
+
+        android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
+        boolean batteryExcluded = false;
+        if (pm != null && Build.VERSION.SDK_INT >= 23) {
+            batteryExcluded = pm.isIgnoringBatteryOptimizations(getPackageName());
+        }
+        String backend = ShizukuManager.state() == ShizukuManager.READY ? "Shizuku" : "Accesibilidad";
+        String device = Build.MODEL + " · Android " + Build.VERSION.RELEASE;
+
+        LinearLayout g1 = new LinearLayout(this);
+        g1.setOrientation(LinearLayout.HORIZONTAL);
+        g1.addView(Ui.statTile(this, R.drawable.ic_accessibility, "Servicio",
+                        isServiceAvailable() ? "Activo" : "Inactivo"), gridTileLp());
+        g1.addView(Ui.statTile(this, R.drawable.ic_shield, "Backend", backend), gridTileLp());
+        panel.addView(g1, gridRowLp());
+
+        LinearLayout g2 = new LinearLayout(this);
+        g2.setOrientation(LinearLayout.HORIZONTAL);
+        g2.addView(Ui.statTile(this, R.drawable.ic_battery, "Batería",
+                        batteryExcluded ? "Excluida" : "No excluida"), gridTileLp());
+        g2.addView(Ui.statTile(this, R.drawable.ic_phone, "Dispositivo", device), gridTileLp());
+        panel.addView(g2, gridRowLp());
+
+        // ── Acciones rápidas: 3 tiles que EJECUTAN ──
+        panel.addView(Ui.sectionHeader(this, R.drawable.ic_bolt, "Acciones rápidas"), lpMATCH(4));
+
+        LinearLayout qa = new LinearLayout(this);
+        qa.setOrientation(LinearLayout.HORIZONTAL);
+        qa.addView(actionTile("Captura", R.drawable.ic_camera, new View.OnClickListener() {
             @Override public void onClick(View v) {
-                startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+                if (isServiceAvailable()) sendScreenshot();
+                else toast("Activa el servicio de accesibilidad primero");
             }
+        }), gridTileLp());
+        qa.addView(actionTile("Árbol UI", R.drawable.ic_tree, new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (isServiceAvailable()) sendGetUiTree();
+                else toast("Activa el servicio de accesibilidad primero");
+            }
+        }), gridTileLp());
+        qa.addView(actionTile("Scroll", R.drawable.ic_arrow_down, new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (isServiceAvailable()) sendScrollDown();
+                else toast("Activa el servicio de accesibilidad primero");
+            }
+        }), gridTileLp());
+        panel.addView(qa, gridRowLp());
+
+        // ── Actividad reciente: últimos 5 eventos + "Ver todo" ──
+        LinearLayout recentHeader = Ui.sectionHeader(this, R.drawable.ic_clock, "Actividad reciente");
+        TextView verTodo = new TextView(this);
+        verTodo.setText("Ver todo");
+        verTodo.setTextSize(13);
+        verTodo.setTextColor(ACCENT_BLUE);
+        verTodo.setTypeface(Typeface.DEFAULT_BOLD);
+        verTodo.setPadding(dp(8), dp(4), dp(8), dp(4));
+        verTodo.setMinHeight(dp(48));
+        verTodo.setGravity(Gravity.CENTER_VERTICAL);
+        verTodo.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { showTab(TAB_AJUSTES); }
         });
-        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        blp.topMargin = dp(16);
-        statusCard.addView(btnAccessibility, blp);
+        LinearLayout.LayoutParams vhlp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        vhlp.gravity = Gravity.END;
+        recentHeader.addView(verTodo, vhlp);
+        panel.addView(recentHeader, lpMATCH(4));
 
-        panel.addView(statusCard);
-
-        // accesos rápidos 2x2 con icono
-        LinearLayout.LayoutParams q1lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        q1lp.topMargin = dp(16);
-        panel.addView(sectionTitle("Accesos rápidos"), q1lp);
-
-        LinearLayout grid = new LinearLayout(this);
-        grid.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        glp.topMargin = dp(4);
-        panel.addView(grid, glp);
-
-        LinearLayout row1 = new LinearLayout(this);
-        row1.setOrientation(LinearLayout.HORIZONTAL);
-        grid.addView(row1, gridRowLp());
-        row1.addView(quickTile("Control",   R.drawable.ic_control,  TAB_CONTROL),   gridTileLp());
-        row1.addView(quickTile("Inspector", R.drawable.ic_inspector,TAB_INSPECTOR), gridTileLp());
-
-        LinearLayout row2 = new LinearLayout(this);
-        row2.setOrientation(LinearLayout.HORIZONTAL);
-        grid.addView(row2, gridRowLp());
-        row2.addView(quickTile("Rutinas",   R.drawable.ic_routines, TAB_RUTINAS),   gridTileLp());
-        row2.addView(quickTile("Ajustes",   R.drawable.ic_settings, TAB_AJUSTES),   gridTileLp());
+        LinearLayout recentCard = Ui.card(this);
+        java.util.List<String> recent = ConnectionLog.dump();
+        int start = Math.max(0, recent.size() - 5);
+        if (recent.isEmpty()) {
+            TextView none = new TextView(this);
+            none.setText("Sin actividad todavía.");
+            none.setTextSize(13);
+            none.setTextColor(TEXT_MUTED);
+            recentCard.addView(none);
+        } else {
+            for (int i = recent.size() - 1; i >= start; i--) {
+                String line = recent.get(i);
+                String hora = line.length() >= 8 ? line.substring(0, 8) : "";
+                String msg = line.length() > 10 ? line.substring(10) : line;
+                String tipo = msg.contains("error") ? "error"
+                        : msg.contains("envió") || msg.contains("envio") ? "info"
+                        : msg.contains("Servicio") || msg.contains("servicio") ? "ok" : "text3";
+                recentCard.addView(Ui.logRow(this, tipo, hora, msg), lpMATCH(0));
+            }
+        }
+        panel.addView(recentCard, lpMATCH(12));
 
         return panel;
     }
 
-    private View quickTile(String label, int iconRes, final int tabIndex) {
+    private View actionTile(String label, int iconRes, View.OnClickListener onClick) {
         LinearLayout tile = new LinearLayout(this);
         tile.setOrientation(LinearLayout.VERTICAL);
         tile.setGravity(Gravity.CENTER);
-        tile.setPadding(dp(16), dp(16), dp(16), dp(16));
-        tile.setBackground(getResources().getDrawable(R.drawable.bg_card));
+        tile.setPadding(dp(8), dp(14), dp(8), dp(14));
+        tile.setBackground(Ui.shape(this, "surface2", 14f, "border", 1f));
         tile.setMinimumHeight(dp(80));
-        tile.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { showTab(tabIndex); }
-        });
+        tile.setOnClickListener(onClick);
 
         ImageView icon = new ImageView(this);
         icon.setImageResource(iconRes);
-        icon.setColorFilter(ACCENT_GREEN);
-        tile.addView(icon, new LinearLayout.LayoutParams(dp(28), dp(28)));
+        icon.setColorFilter(ACCENT_BLUE);
+        tile.addView(icon, new LinearLayout.LayoutParams(dp(24), dp(24)));
 
         TextView tv = new TextView(this);
         tv.setText(label);
-        tv.setTextSize(13);
+        tv.setTextSize(12);
         tv.setTextColor(TEXT_MAIN);
         tv.setTypeface(Typeface.DEFAULT_BOLD);
         tv.setGravity(Gravity.CENTER);
-        tv.setPadding(0, dp(8), 0, 0);
-        tile.addView(tv);
+        tv.setMaxLines(1);
+        tv.setEllipsize(TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams tvlp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        tvlp.topMargin = dp(6);
+        tile.addView(tv, tvlp);
 
         return tile;
     }
