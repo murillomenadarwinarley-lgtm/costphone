@@ -177,6 +177,17 @@ public class ShizukuShellService extends ICostPhoneShell.Stub {
         }
     }
 
+    @Override
+    public void destroy() {
+        Log.i(TAG, "ShizukuShellService destroyed");
+        System.exit(0);
+    }
+
+    @Override
+    public void exit() {
+        destroy();
+    }
+
     /** Ejecuta comando usando ProcessBuilder con argumentos separados (SIN shell) y timeout */
     private String execInternal(String[] cmd) {
         if (cmd == null || cmd.length == 0) return "error: no command";
