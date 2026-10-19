@@ -72,6 +72,8 @@ public class SettingsActivity extends Activity {
     private View statusDot;
     private TextView tvStatus;
     private TextView tvStatusDesc;
+    private View headerDot;
+    private TextView headerStatusText;
 
     private View shizukuDot;
     private TextView tvShizuku;
@@ -119,8 +121,7 @@ public class SettingsActivity extends Activity {
         root.addView(headerArea, lpMATCH(0));
 
         headerArea.addView(buildHeader(), lpMATCH(0));
-        headerArea.addView(serviceCard(), lpMATCH(8));
-        headerArea.addView(shizukuCard(), lpMATCH(8));
+        headerArea.addView(shizukuChip(), lpMATCH(8));
 
         ScrollView contentScroll = new ScrollView(this);
         contentScroll.setLayoutParams(new LinearLayout.LayoutParams(
@@ -326,6 +327,7 @@ public class SettingsActivity extends Activity {
     private LinearLayout buildInicioPanel() {
         LinearLayout panel = createPanel();
 
+        // tarjeta de estado de accesibilidad
         LinearLayout statusCard = new LinearLayout(this);
         statusCard.setOrientation(LinearLayout.VERTICAL);
         statusCard.setBackground(getResources().getDrawable(R.drawable.bg_card));
@@ -353,6 +355,8 @@ public class SettingsActivity extends Activity {
         tvStatusDesc.setTextSize(13);
         tvStatusDesc.setTextColor(TEXT_DIM);
         tvStatusDesc.setLineSpacing(dp(5), 1f);
+        tvStatusDesc.setMaxLines(3);
+        tvStatusDesc.setEllipsize(TextUtils.TruncateAt.END);
         LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -368,6 +372,7 @@ public class SettingsActivity extends Activity {
         btnAccessibility.setBackground(rounded(ACCENT_BLUE, 12, 0));
         btnAccessibility.setPadding(dp(18), dp(14), dp(18), dp(14));
         btnAccessibility.setStateListAnimator(null);
+        btnAccessibility.setMinimumHeight(dp(48));
         btnAccessibility.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
@@ -381,43 +386,70 @@ public class SettingsActivity extends Activity {
 
         panel.addView(statusCard);
 
-        LinearLayout quickRow = new LinearLayout(this);
-        quickRow.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout.LayoutParams qrlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        qrlp.topMargin = dp(12);
-        panel.addView(quickRow, qrlp);
+        // accesos rápidos 2x2 con icono
+        LinearLayout.LayoutParams q1lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        q1lp.topMargin = dp(16);
+        panel.addView(sectionTitle("Accesos rápidos"), q1lp);
 
-        Button quickControl = quickButton("Control", ACCENT_BLUE);
-        quickControl.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { showTab(TAB_CONTROL); }
-        });
-        quickRow.addView(quickControl, quickLp());
+        LinearLayout grid = new LinearLayout(this);
+        grid.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams glp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        glp.topMargin = dp(4);
+        panel.addView(grid, glp);
 
-        Button quickInspector = quickButton("Inspector", ACCENT_VIOLET);
-        quickInspector.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { showTab(TAB_INSPECTOR); }
-        });
-        quickRow.addView(quickInspector, quickLp());
+        LinearLayout row1 = new LinearLayout(this);
+        row1.setOrientation(LinearLayout.HORIZONTAL);
+        grid.addView(row1, gridRowLp());
+        row1.addView(quickTile("Control",   R.drawable.ic_control,  TAB_CONTROL),   gridTileLp());
+        row1.addView(quickTile("Inspector", R.drawable.ic_inspector,TAB_INSPECTOR), gridTileLp());
+
+        LinearLayout row2 = new LinearLayout(this);
+        row2.setOrientation(LinearLayout.HORIZONTAL);
+        grid.addView(row2, gridRowLp());
+        row2.addView(quickTile("Rutinas",   R.drawable.ic_routines, TAB_RUTINAS),   gridTileLp());
+        row2.addView(quickTile("Ajustes",   R.drawable.ic_settings, TAB_AJUSTES),   gridTileLp());
 
         return panel;
     }
 
-    private Button quickButton(String label, int color) {
-        Button b = new Button(this);
-        b.setText(label);
-        b.setAllCaps(false);
-        b.setTextSize(14);
-        b.setTextColor(0xFFFFFFFF);
-        b.setTypeface(Typeface.DEFAULT_BOLD);
-        b.setBackground(rounded(color, 12, 0));
-        b.setPadding(dp(14), dp(14), dp(14), dp(14));
-        b.setStateListAnimator(null);
-        return b;
+    private View quickTile(String label, int iconRes, final int tabIndex) {
+        LinearLayout tile = new LinearLayout(this);
+        tile.setOrientation(LinearLayout.VERTICAL);
+        tile.setGravity(Gravity.CENTER);
+        tile.setPadding(dp(16), dp(16), dp(16), dp(16));
+        tile.setBackground(getResources().getDrawable(R.drawable.bg_card));
+        tile.setMinimumHeight(dp(80));
+        tile.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { showTab(tabIndex); }
+        });
+
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(iconRes);
+        icon.setColorFilter(ACCENT_GREEN);
+        tile.addView(icon, new LinearLayout.LayoutParams(dp(28), dp(28)));
+
+        TextView tv = new TextView(this);
+        tv.setText(label);
+        tv.setTextSize(13);
+        tv.setTextColor(TEXT_MAIN);
+        tv.setTypeface(Typeface.DEFAULT_BOLD);
+        tv.setGravity(Gravity.CENTER);
+        tv.setPadding(0, dp(8), 0, 0);
+        tile.addView(tv);
+
+        return tile;
     }
 
-    private LinearLayout.LayoutParams quickLp() {
+    private LinearLayout.LayoutParams gridRowLp() {
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        p.topMargin = dp(4);
+        return p;
+    }
+
+    private LinearLayout.LayoutParams gridTileLp() {
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         p.leftMargin = dp(4);
@@ -1563,6 +1595,10 @@ public class SettingsActivity extends Activity {
             tvStatus.setTextColor(color);
             tvStatusDesc.setText(desc);
         }
+        if (headerDot != null) {
+            headerDot.setBackground(rounded(color, 999, 0));
+            headerStatusText.setText(text);
+        }
     }
 
     private int serviceState() {
@@ -1682,138 +1718,84 @@ public class SettingsActivity extends Activity {
 
         header.addView(titleBlock);
 
+        // chip de estado con punto de color
+        LinearLayout statusChip = new LinearLayout(this);
+        statusChip.setOrientation(LinearLayout.HORIZONTAL);
+        statusChip.setGravity(Gravity.CENTER_VERTICAL);
+        statusChip.setPadding(dp(8), dp(4), dp(8), dp(4));
+        statusChip.setBackground(rounded(0x33FFFFFF, 999, 0));
+
+        headerDot = new View(this);
+        headerDot.setBackground(rounded(TEXT_MUTED, 999, 0));
+        statusChip.addView(headerDot, lp(dp(8), dp(8), 0));
+
+        headerStatusText = new TextView(this);
+        headerStatusText.setTextSize(11);
+        headerStatusText.setTextColor(0xFF8FB5AC);
+        headerStatusText.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams hstlp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        hstlp.leftMargin = dp(6);
+        statusChip.addView(headerStatusText, hstlp);
+
         TextView version = new TextView(this);
         version.setText("v" + versionName());
-        version.setTextSize(12);
+        version.setTextSize(11);
         version.setTextColor(0xFF8FB5AC);
         version.setPadding(dp(8), dp(4), dp(8), dp(4));
         version.setBackground(rounded(0x33FFFFFF, 4, 0));
-        header.addView(version);
+        LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        vlp.leftMargin = dp(8);
+        header.addView(version, vlp);
+        header.addView(statusChip);
 
         return header;
     }
 
-    private View serviceCard() {
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(getResources().getDrawable(R.drawable.bg_card));
-        card.setPadding(dp(20), dp(20), dp(20), dp(20));
-
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-
-        statusDot = new View(this);
-        row.addView(statusDot, lp(dp(16), dp(16), 0));
-
-        tvStatus = new TextView(this);
-        tvStatus.setTextSize(18);
-        tvStatus.setTextColor(TEXT_MAIN);
-        tvStatus.setTypeface(Typeface.DEFAULT_BOLD);
-        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        tlp.leftMargin = dp(12);
-        row.addView(tvStatus, tlp);
-        card.addView(row);
-
-        tvStatusDesc = new TextView(this);
-        tvStatusDesc.setTextSize(13);
-        tvStatusDesc.setTextColor(TEXT_DIM);
-        tvStatusDesc.setLineSpacing(dp(5), 1f);
-        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        dlp.topMargin = dp(12);
-        card.addView(tvStatusDesc, dlp);
-
-        Button btn = new Button(this);
-        btn.setText("Abrir ajustes de accesibilidad");
-        btn.setAllCaps(false);
-        btn.setTextSize(15);
-        btn.setTextColor(0xFFFFFFFF);
-        btn.setTypeface(Typeface.DEFAULT_BOLD);
-        btn.setBackground(rounded(ACCENT_BLUE, 12, 0));
-        btn.setPadding(dp(18), dp(14), dp(18), dp(14));
-        btn.setStateListAnimator(null);
-        btn.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
-            }
-        });
-        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        blp.topMargin = dp(16);
-        card.addView(btn, blp);
-
-        return card;
-    }
-
-    private View shizukuCard() {
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(getResources().getDrawable(R.drawable.bg_card));
-        card.setPadding(dp(20), dp(18), dp(20), dp(18));
-
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
+    private View shizukuChip() {
+        LinearLayout chip = new LinearLayout(this);
+        chip.setOrientation(LinearLayout.HORIZONTAL);
+        chip.setGravity(Gravity.CENTER_VERTICAL);
+        chip.setPadding(dp(14), dp(10), dp(14), dp(10));
+        chip.setBackground(getResources().getDrawable(R.drawable.bg_card));
 
         shizukuDot = new View(this);
-        row.addView(shizukuDot, lp(dp(12), dp(12), 0));
+        shizukuDot.setBackground(rounded(TEXT_MUTED, 999, 0));
+        chip.addView(shizukuDot, lp(dp(10), dp(10), 0));
 
         tvShizuku = new TextView(this);
-        tvShizuku.setTextSize(15);
+        tvShizuku.setTextSize(13);
         tvShizuku.setTextColor(TEXT_MAIN);
         tvShizuku.setTypeface(Typeface.DEFAULT_BOLD);
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         tlp.leftMargin = dp(10);
-        row.addView(tvShizuku, tlp);
+        chip.addView(tvShizuku, tlp);
 
         TextView badge = new TextView(this);
         badge.setText("OPCIONAL");
         badge.setTextSize(9);
         badge.setTextColor(ACCENT_BLUE);
         badge.setTypeface(Typeface.DEFAULT_BOLD);
-        badge.setPadding(dp(8), dp(3), dp(8), dp(3));
+        badge.setPadding(dp(6), dp(2), dp(6), dp(2));
         badge.setBackground(rounded(0x1A1FBF8F, 4, 0));
-        LinearLayout.LayoutParams blp2 = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        blp2.leftMargin = dp(10);
-        row.addView(badge, blp2);
-
-        card.addView(row);
-
-        TextView desc = new TextView(this);
-        desc.setText("Shell con permisos especiales para gestos y teclas rápidos.");
-        desc.setTextSize(13);
-        desc.setTextColor(TEXT_DIM);
-        desc.setLineSpacing(dp(4), 1f);
-        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        dlp.topMargin = dp(12);
-        card.addView(desc, dlp);
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        blp.rightMargin = dp(8);
+        chip.addView(badge, blp);
 
         btnShizuku = new Button(this);
         btnShizuku.setAllCaps(false);
-        btnShizuku.setTextSize(14);
+        btnShizuku.setTextSize(12);
         btnShizuku.setTextColor(0xFFFFFFFF);
         btnShizuku.setTypeface(Typeface.DEFAULT_BOLD);
-        btnShizuku.setBackground(rounded(ACCENT_BLUE, 12, 0));
-        btnShizuku.setPadding(dp(18), dp(12), dp(18), dp(12));
+        btnShizuku.setBackground(rounded(ACCENT_BLUE, 8, 0));
+        btnShizuku.setPadding(dp(10), dp(4), dp(10), dp(4));
         btnShizuku.setStateListAnimator(null);
-        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        blp.topMargin = dp(16);
-        card.addView(btnShizuku, blp);
+        chip.addView(btnShizuku);
 
-        return card;
+        return chip;
     }
 
     private TextView sectionTitle(String text) {
