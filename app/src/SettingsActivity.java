@@ -33,22 +33,22 @@ import java.util.List;
 
 public class SettingsActivity extends Activity {
 
-    private static final int BG_DARK      = 0xFFF6F7F9;
-    private static final int BG_HEADER    = 0xFF187A62;
-    private static final int BG_CARD      = 0xFFFFFFFF;
-    private static final int BG_CARD_ALT  = 0xFFF0F2F5;
-    private static final int BG_INPUT     = 0xFFFFFFFF;
-    private static final int ACCENT_BLUE  = 0xFF187A62;
-    private static final int ACCENT_GREEN = 0xFF187A62;
-    private static final int ACCENT_RED   = 0xFFEF4444;
-    private static final int ACCENT_AMBER = 0xFFF59E0B;
-    private static final int ACCENT_VIOLET= 0xFF7C3AED;
-    private static final int TEXT_MAIN    = 0xFF202631;
-    private static final int TEXT_DIM     = 0xFF5A6578;
-    private static final int TEXT_MUTED   = 0xFF8A94A6;
-    private static final int LOG_TEXT     = 0xFF187A62;
-    private static final int LOG_BG       = 0xFFF0F2F5;
-    private static final int DIVIDER      = 0xFFE2E5EA;
+    private static final int BG_DARK      = 0xFF0B1F1D;
+    private static final int BG_HEADER    = 0xFF1FBF8F;
+    private static final int BG_CARD      = 0xFF12302C;
+    private static final int BG_CARD_ALT  = 0xFF1A3A35;
+    private static final int BG_INPUT     = 0xFF12302C;
+    private static final int ACCENT_BLUE  = 0xFF1FBF8F;
+    private static final int ACCENT_GREEN = 0xFF1FBF8F;
+    private static final int ACCENT_RED   = 0xFFF0524F;
+    private static final int ACCENT_AMBER = 0xFFF5B83D;
+    private static final int ACCENT_VIOLET= 0xFF8B5CF6;
+    private static final int TEXT_MAIN    = 0xFFE8F5F1;
+    private static final int TEXT_DIM     = 0xFF8FB5AC;
+    private static final int TEXT_MUTED   = 0xFF6B9488;
+    private static final int LOG_TEXT     = 0xFF1FBF8F;
+    private static final int LOG_BG       = 0xFF1A3A35;
+    private static final int DIVIDER      = 0xFF1E4A44;
     private static final int CARD_RADIUS  = 12;
     private static final int STATUS_RADIUS= 999;
 
@@ -107,6 +107,9 @@ public class SettingsActivity extends Activity {
         super.onCreate(b);
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 
+        android.widget.FrameLayout outer = new android.widget.FrameLayout(this);
+        outer.setBackgroundColor(BG_DARK);
+
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(BG_DARK);
@@ -141,9 +144,52 @@ public class SettingsActivity extends Activity {
         contentArea.addView(panelRutinas);
         contentArea.addView(panelAjustes);
 
-        root.addView(buildTabBar(), lpMATCH(0));
+        View tabBar = buildTabBar();
+        root.addView(tabBar, lpMATCH(0));
 
-        setContentView(root);
+        android.widget.FrameLayout.LayoutParams outerLp = new android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT);
+        outerLp.gravity = Gravity.CENTER_HORIZONTAL;
+        outer.addView(root, outerLp);
+
+        setContentView(outer);
+
+        // max-width ~600dp centrado en pantallas anchas
+        final int maxWidthPx = dp(600);
+        root.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+            @Override public void onLayoutChange(View v, int l, int t, int r, int b,
+                                                 int ol, int ot, int or, int ob) {
+                int w = r - l;
+                if (w > maxWidthPx) {
+                    android.view.ViewGroup.LayoutParams lp = v.getLayoutParams();
+                    if (lp instanceof android.widget.FrameLayout.LayoutParams) {
+                        android.widget.FrameLayout.LayoutParams flp =
+                                (android.widget.FrameLayout.LayoutParams) lp;
+                        flp.width = maxWidthPx;
+                        flp.gravity = Gravity.CENTER_HORIZONTAL;
+                        v.setLayoutParams(flp);
+                    }
+                }
+            }
+        });
+
+        // insets de barras del sistema (minSdk 24 → API directa)
+        root.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
+            @Override public android.view.WindowInsets onApplyWindowInsets(View v, android.view.WindowInsets insets) {
+                int bottom = insets.getSystemWindowInsetBottom();
+                int top = insets.getSystemWindowInsetTop();
+                tabBar.setPadding(tabBar.getPaddingLeft(),
+                        Math.max(dp(4), top),
+                        tabBar.getPaddingRight(),
+                        Math.max(dp(4), bottom));
+                headerArea.setPadding(headerArea.getPaddingLeft(),
+                        Math.max(0, top),
+                        headerArea.getPaddingRight(),
+                        headerArea.getPaddingBottom());
+                return insets;
+            }
+        });
 
         showTab(TAB_INICIO);
 
@@ -194,11 +240,11 @@ public class SettingsActivity extends Activity {
         bar.setBackgroundColor(BG_CARD);
         bar.setPadding(dp(4), dp(4), dp(4), dp(4));
 
-        tabInicio    = tabButton("Inicio", TAB_INICIO);
-        tabControl   = tabButton("Control", TAB_CONTROL);
-        tabInspector = tabButton("Inspector", TAB_INSPECTOR);
-        tabRutinas   = tabButton("Rutinas", TAB_RUTINAS);
-        tabAjustes   = tabButton("Ajustes", TAB_AJUSTES);
+        tabInicio    = tabButton("Inicio",    R.drawable.ic_home,     TAB_INICIO);
+        tabControl   = tabButton("Control",   R.drawable.ic_control,  TAB_CONTROL);
+        tabInspector = tabButton("Inspector", R.drawable.ic_inspector,TAB_INSPECTOR);
+        tabRutinas   = tabButton("Rutinas",   R.drawable.ic_routines, TAB_RUTINAS);
+        tabAjustes   = tabButton("Ajustes",   R.drawable.ic_settings, TAB_AJUSTES);
 
         bar.addView(tabInicio,    tabLp());
         bar.addView(tabControl,   tabLp());
@@ -217,20 +263,32 @@ public class SettingsActivity extends Activity {
         return p;
     }
 
-    private View tabButton(String label, int index) {
+    private View tabButton(String label, int iconRes, int index) {
+        LinearLayout item = new LinearLayout(this);
+        item.setOrientation(LinearLayout.VERTICAL);
+        item.setGravity(Gravity.CENTER);
+        item.setPadding(dp(4), dp(8), dp(4), dp(8));
+        item.setTag(index);
+
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(iconRes);
+        icon.setColorFilter(TEXT_DIM);
+        item.addView(icon, new LinearLayout.LayoutParams(dp(24), dp(24)));
+
         TextView tv = new TextView(this);
         tv.setText(label);
-        tv.setTextSize(12);
-        tv.setGravity(Gravity.CENTER);
-        tv.setPadding(dp(4), dp(12), dp(4), dp(12));
+        tv.setTextSize(11);
         tv.setTextColor(TEXT_DIM);
-        tv.setTag(index);
-        tv.setOnClickListener(new View.OnClickListener() {
+        tv.setGravity(Gravity.CENTER);
+        item.addView(tv, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        item.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 showTab((int) v.getTag());
             }
         });
-        return tv;
+        return item;
     }
 
     private void showTab(int index) {
@@ -240,16 +298,24 @@ public class SettingsActivity extends Activity {
         panelRutinas.setVisibility(index == TAB_RUTINAS ? View.VISIBLE : View.GONE);
         panelAjustes.setVisibility(index == TAB_AJUSTES ? View.VISIBLE : View.GONE);
 
-        setTabColor(tabInicio, index == TAB_INICIO ? ACCENT_BLUE : TEXT_DIM);
-        setTabColor(tabControl, index == TAB_CONTROL ? ACCENT_BLUE : TEXT_DIM);
-        setTabColor(tabInspector, index == TAB_INSPECTOR ? ACCENT_BLUE : TEXT_DIM);
-        setTabColor(tabRutinas, index == TAB_RUTINAS ? ACCENT_BLUE : TEXT_DIM);
-        setTabColor(tabAjustes, index == TAB_AJUSTES ? ACCENT_BLUE : TEXT_DIM);
+        styleTab(tabInicio, index == TAB_INICIO);
+        styleTab(tabControl, index == TAB_CONTROL);
+        styleTab(tabInspector, index == TAB_INSPECTOR);
+        styleTab(tabRutinas, index == TAB_RUTINAS);
+        styleTab(tabAjustes, index == TAB_AJUSTES);
     }
 
-    private void setTabColor(View tab, int color) {
-        if (tab instanceof TextView) {
-            ((TextView) tab).setTextColor(color);
+    private void styleTab(View tab, boolean active) {
+        if (!(tab instanceof LinearLayout)) return;
+        LinearLayout item = (LinearLayout) tab;
+        item.setBackgroundResource(active ? R.drawable.bg_tab_active : 0);
+        // icono
+        if (item.getChildCount() > 0 && item.getChildAt(0) instanceof ImageView) {
+            ((ImageView) item.getChildAt(0)).setColorFilter(active ? ACCENT_GREEN : TEXT_DIM);
+        }
+        // etiqueta
+        if (item.getChildCount() > 1 && item.getChildAt(1) instanceof TextView) {
+            ((TextView) item.getChildAt(1)).setTextColor(active ? ACCENT_GREEN : TEXT_DIM);
         }
     }
 
@@ -262,7 +328,7 @@ public class SettingsActivity extends Activity {
 
         LinearLayout statusCard = new LinearLayout(this);
         statusCard.setOrientation(LinearLayout.VERTICAL);
-        statusCard.setBackground(rounded(BG_CARD, CARD_RADIUS, 0));
+        statusCard.setBackground(getResources().getDrawable(R.drawable.bg_card));
         statusCard.setPadding(dp(20), dp(20), dp(20), dp(20));
 
         LinearLayout row = new LinearLayout(this);
@@ -1611,7 +1677,7 @@ public class SettingsActivity extends Activity {
         TextView sub = new TextView(this);
         sub.setText("Centro de control de Android");
         sub.setTextSize(12);
-        sub.setTextColor(0xFFDCECE7);
+        sub.setTextColor(0xFF8FB5AC);
         titleBlock.addView(sub);
 
         header.addView(titleBlock);
@@ -1619,7 +1685,7 @@ public class SettingsActivity extends Activity {
         TextView version = new TextView(this);
         version.setText("v" + versionName());
         version.setTextSize(12);
-        version.setTextColor(0xFFDCECE7);
+        version.setTextColor(0xFF8FB5AC);
         version.setPadding(dp(8), dp(4), dp(8), dp(4));
         version.setBackground(rounded(0x33FFFFFF, 4, 0));
         header.addView(version);
@@ -1630,7 +1696,7 @@ public class SettingsActivity extends Activity {
     private View serviceCard() {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(rounded(BG_CARD, CARD_RADIUS, 0));
+        card.setBackground(getResources().getDrawable(R.drawable.bg_card));
         card.setPadding(dp(20), dp(20), dp(20), dp(20));
 
         LinearLayout row = new LinearLayout(this);
@@ -1687,7 +1753,7 @@ public class SettingsActivity extends Activity {
     private View shizukuCard() {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(rounded(BG_CARD_ALT, CARD_RADIUS, 0));
+        card.setBackground(getResources().getDrawable(R.drawable.bg_card));
         card.setPadding(dp(20), dp(18), dp(20), dp(18));
 
         LinearLayout row = new LinearLayout(this);
@@ -1713,7 +1779,7 @@ public class SettingsActivity extends Activity {
         badge.setTextColor(ACCENT_BLUE);
         badge.setTypeface(Typeface.DEFAULT_BOLD);
         badge.setPadding(dp(8), dp(3), dp(8), dp(3));
-        badge.setBackground(rounded(0xFF1E3A5F, 4, 0));
+        badge.setBackground(rounded(0x1A1FBF8F, 4, 0));
         LinearLayout.LayoutParams blp2 = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
