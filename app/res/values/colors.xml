@@ -1,4 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_bg">#005FD1</color>
+    <color name="ic_bg">#187A62</color>
+    <color name="bg_main">#F6F7F9</color>
+    <color name="bg_card">#FFFFFF</color>
+    <color name="bg_card_alt">#F0F2F5</color>
+    <color name="bg_input">#FFFFFF</color>
+    <color name="bg_header">#187A62</color>
+    <color name="text_main">#202631</color>
+    <color name="text_dim">#5A6578</color>
+    <color name="text_muted">#8A94A6</color>
+    <color name="text_log">#187A62</color>
+    <color name="log_bg">#F0F2F5</color>
+    <color name="divider">#E2E5EA</color>
+    <color name="accent_primary">#187A62</color>
+    <color name="accent_positive">#DCECE7</color>
+    <color name="accent_warning">#F9E7C9</color>
+    <color name="accent_error">#EF4444</color>
+    <color name="accent_violet">#7C3AED</color>
+    <color name="badge_bg">#E8F5F1</color>
+    <color name="badge_text">#187A62</color>
 </resources>

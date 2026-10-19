@@ -33,23 +33,23 @@ import java.util.List;
 
 public class SettingsActivity extends Activity {
 
-    private static final int BG_DARK      = 0xFF0A0F1E;
-    private static final int BG_HEADER    = 0xFF111827;
-    private static final int BG_CARD      = 0xFF151D2E;
-    private static final int BG_CARD_ALT  = 0xFF1A2338;
-    private static final int BG_INPUT     = 0xFF0F172A;
-    private static final int ACCENT_BLUE  = 0xFF3B82F6;
-    private static final int ACCENT_GREEN = 0xFF10B981;
+    private static final int BG_DARK      = 0xFFF6F7F9;
+    private static final int BG_HEADER    = 0xFF187A62;
+    private static final int BG_CARD      = 0xFFFFFFFF;
+    private static final int BG_CARD_ALT  = 0xFFF0F2F5;
+    private static final int BG_INPUT     = 0xFFFFFFFF;
+    private static final int ACCENT_BLUE  = 0xFF187A62;
+    private static final int ACCENT_GREEN = 0xFF187A62;
     private static final int ACCENT_RED   = 0xFFEF4444;
     private static final int ACCENT_AMBER = 0xFFF59E0B;
-    private static final int ACCENT_VIOLET= 0xFF8B5CF6;
-    private static final int TEXT_MAIN    = 0xFFF1F5F9;
-    private static final int TEXT_DIM     = 0xFF94A3B8;
-    private static final int TEXT_MUTED   = 0xFF64748B;
-    private static final int LOG_TEXT     = 0xFF7DD3FC;
-    private static final int LOG_BG       = 0xFF0F172A;
-    private static final int DIVIDER      = 0xFF1E293B;
-    private static final int CARD_RADIUS  = 18;
+    private static final int ACCENT_VIOLET= 0xFF7C3AED;
+    private static final int TEXT_MAIN    = 0xFF202631;
+    private static final int TEXT_DIM     = 0xFF5A6578;
+    private static final int TEXT_MUTED   = 0xFF8A94A6;
+    private static final int LOG_TEXT     = 0xFF187A62;
+    private static final int LOG_BG       = 0xFFF0F2F5;
+    private static final int DIVIDER      = 0xFFE2E5EA;
+    private static final int CARD_RADIUS  = 12;
     private static final int STATUS_RADIUS= 999;
 
     private static final String SECRET = "termux-accessdroid-2025";
@@ -107,24 +107,23 @@ public class SettingsActivity extends Activity {
         super.onCreate(b);
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 
-        ScrollView scroll = new ScrollView(this);
-        scroll.setBackgroundColor(BG_DARK);
-        scroll.setFillViewport(true);
-
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(16), dp(20), dp(16), dp(24));
-        scroll.addView(root);
+        root.setBackgroundColor(BG_DARK);
 
-        root.addView(buildHeader(), lpMATCH(0));
-        root.addView(serviceCard(), lpMATCH(16));
-        root.addView(shizukuCard(), lpMATCH(12));
-        root.addView(buildTabBar(), lpMATCH(12));
+        LinearLayout headerArea = new LinearLayout(this);
+        headerArea.setOrientation(LinearLayout.VERTICAL);
+        root.addView(headerArea, lpMATCH(0));
+
+        headerArea.addView(buildHeader(), lpMATCH(0));
+        headerArea.addView(serviceCard(), lpMATCH(8));
+        headerArea.addView(shizukuCard(), lpMATCH(8));
 
         contentArea = new LinearLayout(this);
         contentArea.setOrientation(LinearLayout.VERTICAL);
-        contentArea.setPadding(dp(16), dp(16), dp(16), dp(24));
-        root.addView(contentArea, lpMATCH(0));
+        contentArea.setPadding(dp(16), dp(8), dp(16), dp(8));
+        root.addView(contentArea, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
         panelInicio = buildInicioPanel();
         panelControl = buildControlPanel();
@@ -138,6 +137,10 @@ public class SettingsActivity extends Activity {
         contentArea.addView(panelRutinas);
         contentArea.addView(panelAjustes);
 
+        root.addView(buildTabBar(), lpMATCH(0));
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(root);
         setContentView(scroll);
 
         showTab(TAB_INICIO);
@@ -599,7 +602,7 @@ public class SettingsActivity extends Activity {
         });
         adv.addView(btnScroll, controlLp());
 
-        Button btnScreenshot = controlButton("Captura");
+        Button btnScreenshot = controlButton("Captura del sistema");
         btnScreenshot.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 if (isServiceAvailable()) {
@@ -654,7 +657,7 @@ public class SettingsActivity extends Activity {
         panel.addView(treeInfo, sectionLp());
 
         panel.addView(sectionTitle("Captura de pantalla"));
-        Button btnScreenshot = controlButton("Tomar captura");
+        Button btnScreenshot = controlButton("Guardar captura PNG");
         btnScreenshot.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
                 if (isServiceAvailable()) {
@@ -1578,35 +1581,46 @@ public class SettingsActivity extends Activity {
 
     private View buildHeader() {
         LinearLayout header = new LinearLayout(this);
-        header.setOrientation(LinearLayout.VERTICAL);
-        header.setGravity(Gravity.CENTER_HORIZONTAL);
-        header.setPadding(dp(24), dp(28), dp(24), dp(28));
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(dp(16), dp(12), dp(16), dp(12));
         header.setBackground(rounded(BG_HEADER, CARD_RADIUS, 0));
 
         ImageView logo = new ImageView(this);
         logo.setImageResource(R.mipmap.ic_launcher);
-        logo.setPadding(dp(14), dp(14), dp(14), dp(14));
-        logo.setBackground(rounded(ACCENT_BLUE, 22, 0));
-        logo.setLayoutParams(new LinearLayout.LayoutParams(dp(72), dp(72)));
-        LinearLayout logoWrap = new LinearLayout(this);
-        logoWrap.setGravity(Gravity.CENTER);
-        logoWrap.addView(logo);
-        header.addView(logoWrap, lpWRAP(0));
+        logo.setPadding(dp(6), dp(6), dp(6), dp(6));
+        logo.setBackground(rounded(ACCENT_BLUE, 8, 0));
+        logo.setLayoutParams(new LinearLayout.LayoutParams(dp(40), dp(40)));
+        header.addView(logo);
+
+        LinearLayout titleBlock = new LinearLayout(this);
+        titleBlock.setOrientation(LinearLayout.VERTICAL);
+        titleBlock.setPadding(dp(12), dp(0), dp(0), dp(0));
+        titleBlock.setLayoutParams(new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
         TextView title = new TextView(this);
         title.setText("CostPhone");
-        title.setTextSize(28);
-        title.setTextColor(TEXT_MAIN);
+        title.setTextSize(20);
+        title.setTextColor(0xFFFFFFFF);
         title.setTypeface(Typeface.DEFAULT_BOLD);
-        title.setGravity(Gravity.CENTER);
-        header.addView(title, lpWRAP(14));
+        titleBlock.addView(title);
 
         TextView sub = new TextView(this);
         sub.setText("Centro de control de Android");
-        sub.setTextSize(15);
-        sub.setTextColor(TEXT_DIM);
-        sub.setGravity(Gravity.CENTER);
-        header.addView(sub, lpWRAP(8));
+        sub.setTextSize(12);
+        sub.setTextColor(0xFFDCECE7);
+        titleBlock.addView(sub);
+
+        header.addView(titleBlock);
+
+        TextView version = new TextView(this);
+        version.setText("v" + versionName());
+        version.setTextSize(12);
+        version.setTextColor(0xFFDCECE7);
+        version.setPadding(dp(8), dp(4), dp(8), dp(4));
+        version.setBackground(rounded(0x33FFFFFF, 4, 0));
+        header.addView(version);
 
         return header;
     }
@@ -1766,8 +1780,9 @@ public class SettingsActivity extends Activity {
         b.setTextColor(0xFFFFFFFF);
         b.setTypeface(Typeface.DEFAULT_BOLD);
         b.setBackground(rounded(ACCENT_BLUE, 10, 0));
-        b.setPadding(dp(12), dp(12), dp(12), dp(12));
+        b.setPadding(dp(8), dp(10), dp(8), dp(10));
         b.setStateListAnimator(null);
+        b.setMinimumHeight(dp(48));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         lp.leftMargin = dp(3);
