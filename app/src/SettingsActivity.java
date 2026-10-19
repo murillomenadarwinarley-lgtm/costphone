@@ -119,10 +119,14 @@ public class SettingsActivity extends Activity {
         headerArea.addView(serviceCard(), lpMATCH(8));
         headerArea.addView(shizukuCard(), lpMATCH(8));
 
+        ScrollView contentScroll = new ScrollView(this);
+        contentScroll.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
         contentArea = new LinearLayout(this);
         contentArea.setOrientation(LinearLayout.VERTICAL);
         contentArea.setPadding(dp(16), dp(8), dp(16), dp(8));
-        root.addView(contentArea, new LinearLayout.LayoutParams(
+        contentScroll.addView(contentArea);
+        root.addView(contentScroll, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
         panelInicio = buildInicioPanel();
@@ -139,9 +143,7 @@ public class SettingsActivity extends Activity {
 
         root.addView(buildTabBar(), lpMATCH(0));
 
-        ScrollView scroll = new ScrollView(this);
-        scroll.addView(root);
-        setContentView(scroll);
+        setContentView(root);
 
         showTab(TAB_INICIO);
 
