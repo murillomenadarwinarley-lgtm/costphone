@@ -57,18 +57,19 @@ fi
 cat >> "$TMP_AGENTS" <<'AGENT_BLOCK'
 
 <!-- phone-control -->
-For Android phone tasks, use amctl and the phone-control skill.
-Fast path: launch the target app; prefer clickid or click by visible text; use snap only to discover unknown controls; use screenshots only when accessibility gives no useful content.
-Batch known steps with amctl batch and verify results with amctl waittext. Avoid screenshots between ordinary taps.
-If commands fail, run amctl status and amctl doctor; never claim success without a successful tool result or verification.
-If accessibility is disconnected, tell the user to open CostPhone, press Repair connection, then re-enable it in Android Accessibility settings. If Shizuku is unavailable, guide the user to start its service and grant CostPhone permission; Android authorization cannot be bypassed.
+For Android tasks, prioritize completion over narration. Read ~/.config/opencode/skills/android/phone-control/SKILL.md.
+At the start of a new agent session, if rish is installed, try SESSION_START_WAIT=4 amctl session-start once; reuse the session if active. If it fails, do not retry each task and use the AM fallback.
+Use only selectors confirmed by the current screen. For WhatsApp search, if present in the snapshot, clickid com.whatsapp:id/search_bar_inner_layout (label: "Preguntar a Meta AI o buscar"), not stale menuitem_search.
+Batch dependent actions; use one short wait for the target state, at most one textual snapshot to recover, then verify the final result once. Avoid PNG/screenshots, status/doctor/logs, Python timing, repeated waits and narration in ordinary tasks.
+Never claim success without a result check. If the same action fails twice, stop and explain the blocker. Do not disable the app guard or bypass Android authorization.
+If Accessibility is disconnected, ask the owner to re-enable CostPhone in Android Accessibility settings. If Shizuku is unavailable, ask the owner to start its service and grant permission; do not attempt to bypass authorization.
 Skill file: ~/.config/opencode/skills/android/phone-control/SKILL.md
 <!-- end phone-control -->
 AGENT_BLOCK
 mv "$TMP_AGENTS" "$AGENTS"
 step "Comprobación final"
 printf '\nActualización instalada.\n'
-printf '1) Cierra Termux por completo y vuelve a abrirlo para activar el socket rápido.\n'
-printf '2) Si Android desactivó Accesibilidad tras actualizar CostPhone, actívala otra vez.\n'
-printf '3) Ejecuta: amctl status && amctl doctor\n'
-printf '4) Si hay lag/cierre, reproduce una vez y ejecuta: amctl logs\n'
+printf '1) Reinicia OpenCode para que cargue la skill actualizada.\n'
+printf '2) En una sesión nueva del agente, si Shizuku/rish está disponible, ejecutar una vez: SESSION_START_WAIT=4 amctl session-start\n'
+printf '3) Si Android desactivó Accesibilidad tras actualizar CostPhone, actívala otra vez en Ajustes → Accesibilidad → CostPhone.\n'
+printf '4) No ejecutes status/doctor/logs en tareas normales; úsalos solo si hay un fallo repetible.\n'
