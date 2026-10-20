@@ -1,0 +1,60 @@
+name: CostPhone Engine tests
+
+on:
+  push:
+    branches:
+      - "engine/**"
+    paths:
+      - "engine/**"
+      - "skill/costphone-engine/**"
+      - "termux/install-costphone-engine.sh"
+      - ".github/workflows/engine-tests.yml"
+  pull_request:
+    branches:
+      - mi-cambio
+    paths:
+      - "engine/**"
+      - "skill/costphone-engine/**"
+      - "termux/install-costphone-engine.sh"
+      - ".github/workflows/engine-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  engine-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Syntax checks
+        run: |
+          python -m py_compile engine/costphone_engine.py engine/mcp_server.py engine/test_engine.py
+          bash -n termux/install-costphone-engine.sh
+
+      - name: Offline unit tests
+        run: python -m unittest discover -s engine -p 'test_*.py' -v
+
+      - name: MCP stdio protocol smoke test
+        run: |
+          printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05"}}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
+            | python engine/mcp_server.py > /tmp/costphone-mcp.jsonl
+          python - <<'PY'
+          import json
+          with open("/tmp/costphone-mcp.jsonl", encoding="utf-8") as fh:
+              replies = [json.loads(line) for line in fh if line.strip()]
+          assert len(replies) == 2, replies
+          assert replies[0]["result"]["serverInfo"]["name"] == "costphone-engine"
+          names = {tool["name"] for tool in replies[1]["result"]["tools"]}
+          assert names == {"phone_inspect", "phone_launch", "phone_validate_plan", "phone_run_plan"}, names
+          print("MCP handshake and tool listing passed.")
+          PY
