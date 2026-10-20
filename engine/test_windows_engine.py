@@ -35,6 +35,10 @@ class FakeAdapter:
         self.calls.append(("click", x, y))
         return {"x": x, "y": y, "clicked": True}
 
+    def scroll(self, x, y, clicks):
+        self.calls.append(("scroll", x, y, clicks))
+        return {"x": x, "y": y, "clicks": clicks, "scrolled": True}
+
     def type_text(self, text):
         self.calls.append(("type_text", text))
         return {"characters": len(text), "typed": True}
@@ -97,6 +101,20 @@ class DesktopEngineTests(unittest.TestCase):
         with self.assertRaises(EngineError):
             engine.click(True, 2)
 
+    def test_scroll_checks_permission_resolution_and_range(self):
+        adapter = FakeAdapter()
+        engine = WindowsDesktopEngine(adapter, allow_input=True)
+        self.assertTrue(engine.scroll(100, 100, -3)["ok"])
+        self.assertEqual(adapter.calls[-1], ("scroll", 100, 100, -3))
+        with self.assertRaises(EngineError):
+            engine.scroll(1920, 100, 1)
+        with self.assertRaises(EngineError):
+            engine.scroll(100, 100, 21)
+        disabled = WindowsDesktopEngine(FakeAdapter(), allow_input=False)
+        with self.assertRaises(EngineError) as ctx:
+            disabled.scroll(10, 10, 1)
+        self.assertEqual(ctx.exception.code, "input_disabled")
+
     def test_text_and_key_allowlist(self):
         adapter = FakeAdapter()
         engine = WindowsDesktopEngine(adapter, allow_input=True)
@@ -150,7 +168,7 @@ class DesktopEngineTests(unittest.TestCase):
 
     def test_mcp_tools_and_unknown_tool(self):
         names = {tool["name"] for tool in TOOLS}
-        self.assertEqual(names, {"desktop_inspect", "desktop_screenshot", "desktop_launch_app", "desktop_open_url", "desktop_click", "desktop_type_text", "desktop_press_key", "desktop_inspect_controls", "desktop_click_control", "desktop_set_control_text"})
+        self.assertEqual(names, {"desktop_inspect", "desktop_screenshot", "desktop_launch_app", "desktop_open_url", "desktop_click", "desktop_scroll", "desktop_type_text", "desktop_press_key", "desktop_inspect_controls", "desktop_click_control", "desktop_set_control_text"})
         response = dispatch("tools/call", {"name": "not_a_tool", "arguments": {}}, WindowsDesktopEngine(FakeAdapter()))
         self.assertEqual(response["error"]["code"], -32602)
 
