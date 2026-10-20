@@ -10,6 +10,7 @@ Esta variante ejecuta **el motor y el servidor MCP directamente en Windows**. No
 - **desktop_open_url:** abre una URL HTTP/HTTPS en el navegador predeterminado.
 - **desktop_inspect_controls:** lee los controles visibles que Windows UI Automation expone, con nombre, Automation ID, tipo, estado, rectángulo e identidad de la ventana/proceso. Los selectores están ligados a la ventana que se inspeccionó para rechazar acciones obsoletas.
 - **desktop_click_control:** hace clic en un control seleccionado de forma exacta por los metadatos de Windows.
+- **desktop_scroll:** desplaza una página o panel en una ubicación y cantidad limitadas.
 - **desktop_set_control_text:** establece texto en controles de tipo Edit; exige permiso de entrada y bloquea campos identificados como contraseña.
 - **desktop_click, desktop_type_text, desktop_press_key:** control de ratón/teclado tras autorización explícita durante la instalación.
 
@@ -36,7 +37,7 @@ Cierra y vuelve a abrir OpenCode. Ejecuta en una terminal:
 
     opencode mcp list
 
-Debe aparecer **costphone-pc**. Prueba primero desktop_inspect y desktop_inspect_controls; luego desktop_screenshot. Después, pide abrir el Bloc de notas y escribir un texto de prueba si autorizaste el control de entrada. Al hacer clic, toma una captura reciente y usa solo coordenadas dentro de esa imagen; nunca repitas a ciegas una acción que parezca fallar.
+Debe aparecer **costphone-pc**. Prueba primero desktop_inspect y desktop_inspect_controls; luego desktop_screenshot. Para páginas largas, prueba desktop_scroll con una captura reciente. Después, pide abrir el Bloc de notas y escribir un texto de prueba si autorizaste el control de entrada. Al hacer clic, toma una captura reciente y usa solo coordenadas dentro de esa imagen; nunca repitas a ciegas una acción que parezca fallar.
 
 ## Configuración manual
 
