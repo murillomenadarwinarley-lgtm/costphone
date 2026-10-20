@@ -1,0 +1,43 @@
+plugins {
+    id "com.android.application" version "8.9.2"
+}
+
+android {
+    namespace "com.accessdroid.termux"
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "com.accessdroid.termux"
+        minSdk 24
+        targetSdk 34
+        versionCode 12
+        versionName "1.3"
+    }
+
+    sourceSets {
+        main {
+            manifest.srcFile "AndroidManifest.xml"
+            java {
+                srcDirs = [".", "src"]
+                include "AccessibilityServiceImpl.java", "SettingsActivity.java", "CostPhoneShizukuService.java"
+            }
+            aidl.srcDirs = ["aidl"]
+            res.srcDirs = ["res"]
+        }
+    }
+
+    buildFeatures {
+        aidl true
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    implementation "dev.rikka.shizuku:api:13.1.5"
+    implementation "dev.rikka.shizuku:provider:13.1.5"
+}
