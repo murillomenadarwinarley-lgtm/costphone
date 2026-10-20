@@ -12,6 +12,7 @@ on:
       - ".github/workflows/engine-tests.yml"
       - "pc/windows/**"
       - "docs/pc-windows.md"
+      - "docs/pc-native-windows.md"
       - "README.md"
   pull_request:
     branches:
@@ -19,9 +20,11 @@ on:
     paths:
       - "engine/**"
       - "skill/costphone-engine/**"
+      - "skill/costphone-pc/**"
       - "termux/install-costphone-engine.sh"
       - ".github/workflows/engine-tests.yml"
       - "pc/windows/**"
+      - "docs/pc-windows.md"
       - "docs/pc-native-windows.md"
       - "README.md"
   workflow_dispatch:
