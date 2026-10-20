@@ -201,7 +201,7 @@ Los íconos se regeneran del logo con `python3 gen-icons.py`
 - **MIUI/HyperOS apaga el servicio solo** → activa Termux y CostPhone en
   *Autostart* y quítales la optimización de batería.
 - **CostPhone se desconecta al pasar a segundo plano** → actualiza a v1.7.0, revisa que Accesibilidad siga activa y que la notificación persistente esté presente. Excluye CostPhone y Termux del ahorro de batería; en MIUI/HyperOS activa *Inicio automático*.
-- **Lag / falsos bloqueos** → v1.7.0 separa la lectura de la app activa de capturas y árboles, y permite abrir apps desde Termux sin saltarse la guardia de toques/escritura. Usa `amctl doctor` o `amctl logs` solo si el mismo fallo se repite.
+- **Lag / falsos bloqueos** → v1.7.1 valida el destino dentro del servicio para evitar una consulta extra de app activa por cada acción de un lote; `waittext` ya no repite la misma guardia antes de cada lectura. La guía del agente recomienda menos llamadas y una sola verificación final.
 - **Forzar detención** desde Ajustes detiene los servicios por diseño de Android; es necesario abrir CostPhone otra vez.
 
 ## Seguridad
@@ -230,10 +230,10 @@ Los íconos se regeneran del logo con `python3 gen-icons.py`
 - Licencia: **MIT** — ver [LICENSE](LICENSE).
 
 
-## Rendimiento y accesibilidad (v1.7.0)
+## Rendimiento y accesibilidad (v1.7.1)
 
 - Toques y teclas usan Shizuku como vía preferida cuando está conectado y Accesibilidad como fallback; las llamadas siguen siendo asíncronas.
-- Las acciones, la consulta de la app activa y los diagnósticos pesados usan colas separadas. Así, capturas/árboles no deberían bloquear la guardia ni retrasar un lote normal.
+- Las acciones, la consulta de la app activa y los diagnósticos pesados usan colas separadas. Dentro de `batch`, la CLI consulta el destino una vez y el servicio verifica ese paquete para cada comando; `waittext` hace una sola comprobación inicial y valida el encabezado del árbol.
 - La guía para el agente prioriza IDs/texto, un único snapshot cuando hace falta y lotes cortos; no se recomiendan diagnósticos ni capturas después de cada toque.
 - La aplicación no escribe en `ENABLED_ACCESSIBILITY_SERVICES` ni puede reactivar el permiso por su cuenta. Si Android lo deshabilita durante una instalación/actualización, vuelve a activarlo manualmente en Ajustes → Accesibilidad → CostPhone; no borres los datos de la app.
 
