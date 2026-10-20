@@ -13,8 +13,6 @@ import android.graphics.Path;
 import android.graphics.Rect;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.InputDevice;
@@ -28,6 +26,8 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class AccessibilityServiceImpl extends AccessibilityService {
 
@@ -83,7 +83,8 @@ public class AccessibilityServiceImpl extends AccessibilityService {
     static AccessibilityServiceImpl sInstance;
     int screenW, screenH;
     BroadcastReceiver receiver;
-    Handler handler = new Handler(Looper.getMainLooper());
+    // Mantiene el orden de amctl sin bloquear el hilo principal con I/O, árboles UI o PNG.
+    private final ExecutorService commandExecutor = Executors.newSingleThreadExecutor();
     // Shared secret – set via build-time constant or default. amctl must send it.
     static final String SECRET = "termux-accessdroid-2025";
     // Screenshot callback state
@@ -159,7 +160,21 @@ public class AccessibilityServiceImpl extends AccessibilityService {
         receiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
-                handleCommand(intent);
+                final Intent command = new Intent(intent);
+                try {
+                    commandExecutor.execute(new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                handleCommand(command);
+                            } catch (RuntimeException e) {
+                                Log.e(TAG, "Error procesando comando " + command.getAction(), e);
+                            }
+                        }
+                    });
+                } catch (java.util.concurrent.RejectedExecutionException e) {
+                    Log.w(TAG, "Comando ignorado: el servicio se está cerrando", e);
+                }
             }
         };
         IntentFilter filter = new IntentFilter();
@@ -264,11 +279,12 @@ public class AccessibilityServiceImpl extends AccessibilityService {
 
     @Override
     public void onDestroy() {
-        super.onDestroy();
         if (receiver != null) {
             try { unregisterReceiver(receiver); } catch (Exception e) { }
         }
+        commandExecutor.shutdownNow();
         // Shizuku tiene ciclo de vida propio; no desconectarlo al reparar Accesibilidad.
+        super.onDestroy();
         KeepAliveService.stop(this);
         ConnectionLog.add("Servicio de accesibilidad desconectado");
         sInstance = null;
@@ -451,7 +467,7 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                 int displayId = intent.getIntExtra("displayId", android.view.Display.DEFAULT_DISPLAY);
                 if (Build.VERSION.SDK_INT >= 33) {
                     try {
-                    takeScreenshot(displayId, getMainExecutor(),
+                    takeScreenshot(displayId, commandExecutor,
                         new TakeScreenshotCallback() {
                             @Override
                             public void onSuccess(ScreenshotResult r) {
