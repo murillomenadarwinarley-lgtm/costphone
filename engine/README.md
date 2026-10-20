@@ -5,7 +5,7 @@ CostPhone Engine is an **additive, opt-in orchestration layer** above the existi
 ## What this first version includes
 
 - Local CLI: inspect, launch-and-verify, validate a JSON plan, execute a staged plan, or start MCP.
-- MCP stdio server for agents such as OpenCode: phone_inspect, phone_launch, phone_validate_plan, phone_run_plan.
+- MCP stdio server for agents such as OpenCode: phone_inspect, phone_launch, phone_validate_plan, phone_run_plan. The MCP `phone_run_plan` tool accepts `dry_run: true` to preview without phone I/O.
 - Each plan stage checks the foreground package and visible text before it acts, then checks the expected screen afterwards. If a stage has multiple actions, every action after the first must include its own requires text so the engine re-reads the screen before continuing.
 - Sensitive button actions (for example Send, Delete, Pay, Publish, Checkout and Enter) are blocked by default. There is no automatic action retry.
 - No Python packages, APK rebuild, or modification of existing amctl commands is required.
@@ -98,6 +98,12 @@ costphone-engine run plan.json
 costphone-engine mcp
 ~~~
 
+The CLI and MCP share the same preview behavior. In OpenCode, call `phone_run_plan` with both `plan` and `dry_run: true` to validate and preview without calling `amctl`. A dry run does not bypass the sensitive-action policy; a plan containing a blocked sensitive action remains blocked.
+
+~~~text
+phone_run_plan({ "plan": { ... }, "dry_run": true })
+~~~
+
 A plan can be validated with phone_validate_plan before execution. Use phone_run_plan for the actual staged run.
 
 ## Safety and limits
@@ -107,6 +113,8 @@ A plan can be validated with phone_validate_plan before execution. Use phone_run
 - For sensitive controls, requires must include destination/context and relevant content. The engine takes a fresh snapshot immediately before the action. Use not_contains in expect when a visible distractor would make the destination ambiguous.
 - A failed action is never retried automatically, because an action can succeed even if its confirmation is lost.
 - Each execution stage returns an error if the preconditions or postconditions do not match. Earlier actions in a multi-stage plan may already have happened; inspect the returned stage and do not blindly rerun the whole plan.
+- Successful live results report `postconditions_matched`, a timing breakdown, and `verification_scope=foreground_package_and_visible_accessibility_text`. Do not infer that a real-world operation (such as sending a message) succeeded merely because the expected text appears somewhere in an accessibility snapshot. Require evidence specific to the destination and result; otherwise report the outcome as unverified.
+- The 15–20 second objective is not guaranteed. Use the timing breakdown to identify actual costs; never skip required context checks to meet a target.
 - Keep Android's Accessibility and Shizuku authorizations intact. The engine does not bypass permissions or disable the existing guard.
 - The 10–20 second target is a performance goal for simple tasks, not a measured or guaranteed result yet. Test on the actual phone before relying on it.
 

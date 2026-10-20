@@ -59,15 +59,22 @@ TOOLS: list[dict[str, Any]] = [
     {
         "name": "phone_run_plan",
         "description": (
-            "Execute a staged Android plan. Every stage checks the current package and visible text "
-            "before acting and verifies expected text afterwards. Sensitive external effects are disabled "
-            "unless the local operator enabled COSTPHONE_ALLOW_EXTERNAL_EFFECTS=1; those actions require "
+            "Run a staged Android plan, or set dry_run=true to validate and preview it without "
+            "reading or modifying the phone. A successful live run means the configured foreground-package "
+            "and visible-text postconditions matched; it does not independently prove an external outcome "
+            "(for example, text presence alone does not prove a message was sent). Sensitive external effects "
+            "are disabled unless COSTPHONE_ALLOW_EXTERNAL_EFFECTS=1 is set locally; those actions require "
             "fresh context checks and are never automatically retried."
         ),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "plan": {"type": "object", "description": "Version 1 CostPhone Engine plan."}
+                "plan": {"type": "object", "description": "Version 1 CostPhone Engine plan."},
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "If true, validate and preview the plan only; do not call amctl or touch the phone.",
+                    "default": False,
+                },
             },
             "required": ["plan"],
             "additionalProperties": False,
@@ -125,7 +132,10 @@ def dispatch(method: str, params: dict[str, Any] | None, engine: CostPhoneEngine
             elif name == "phone_validate_plan":
                 result = engine.validate(args.get("plan"))
             elif name == "phone_run_plan":
-                result = engine.run_plan(args.get("plan"))
+                dry_run = args.get("dry_run", False)
+                if not isinstance(dry_run, bool):
+                    raise EngineError("invalid_argument", "dry_run debe ser un booleano.")
+                result = engine.run_plan(args.get("plan"), dry_run=dry_run)
             else:
                 return {"jsonrpc": "2.0", "error": {"code": -32602, "message": "Herramienta desconocida."}}
             return {"jsonrpc": "2.0", "result": _tool_result(result)}

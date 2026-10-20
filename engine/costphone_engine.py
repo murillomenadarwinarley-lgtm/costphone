@@ -397,18 +397,40 @@ class CostPhoneEngine:
             "dry_run": True,
         }
 
-    def run_plan(self, plan: Any) -> dict[str, Any]:
+    def run_plan(self, plan: Any, dry_run: bool = False) -> dict[str, Any]:
+        if not isinstance(dry_run, bool):
+            raise EngineError("invalid_argument", "dry_run debe ser un booleano.")
+
+        # Validate the entire plan before doing any device I/O.
         valid = validate_plan(plan, self.allow_external_effects)
+        if dry_run:
+            return {
+                "ok": True,
+                "dry_run": True,
+                "executed": False,
+                "name": valid["name"],
+                "steps_would_run": len(valid["steps"]),
+                "actions_would_run": valid["action_count"],
+                "actions_executed": 0,
+                "plan": valid,
+                "note": "Simulación únicamente: no se inspeccionó ni modificó el teléfono.",
+            }
+
         started = time.monotonic()
         completed = []
+        stage_timings = []
         for index, step in enumerate(valid["steps"]):
+            stage_started = time.monotonic()
+            prepare_started = time.monotonic()
             if step["launch"]:
                 current = self.adapter.launch(step["launch"])
             else:
                 current = self.adapter.inspect()
+            prepare_ms = int((time.monotonic() - prepare_started) * 1000)
             _check_snapshot(current, step["expect"], f"etapa {index + 1}, antes de actuar")
 
             action_results = []
+            actions_started = time.monotonic()
             for action in step["actions"]:
                 # Sensitive operations and explicitly guarded actions always get a fresh read.
                 if action.get("requires") or is_external_effect(action):
@@ -420,26 +442,46 @@ class CostPhoneEngine:
                     }
                     _check_snapshot(current, live_assertion, f"etapa {index + 1}, antes de {action['kind']}")
                 action_results.append(self.adapter.perform(action))
+            actions_ms = int((time.monotonic() - actions_started) * 1000)
 
-            # Verify the destination and screen outcome once after the action group.
+            # A screen assertion is evidence about visible state, not automatically proof of a
+            # real-world outcome (for example, a matching draft is not proof a message was sent).
+            verify_started = time.monotonic()
             after = self.adapter.inspect()
+            verify_wall_ms = int((time.monotonic() - verify_started) * 1000)
             _check_snapshot(after, step["after"], f"etapa {index + 1}, resultado")
+            stage_elapsed = int((time.monotonic() - stage_started) * 1000)
+            stage_timings.append({
+                "stage": index + 1,
+                "prepare_ms": prepare_ms,
+                "actions_ms": actions_ms,
+                "verify_ms": verify_wall_ms,
+                "total_ms": stage_elapsed,
+            })
             completed.append({
                 "stage": index + 1,
                 "package": after.package,
                 "actions": action_results,
-                "verified": True,
+                "postconditions_matched": True,
             })
 
+        total_ms = int((time.monotonic() - started) * 1000)
         return {
             "ok": True,
+            "dry_run": False,
             "name": valid["name"],
             "steps_completed": len(completed),
             "actions_executed": valid["action_count"],
-            "elapsed_ms": int((time.monotonic() - started) * 1000),
-            "verified": True,
+            "elapsed_ms": total_ms,
+            "postconditions_matched": True,
+            "verification_scope": "foreground_package_and_visible_accessibility_text",
+            "external_effect_outcome": "not_inferred",
+            "timings": {"total_ms": total_ms, "stages": stage_timings},
             "results": completed,
-            "note": "Se verificaron las condiciones configuradas; esto no prueba resultados que la interfaz no exponga.",
+            "note": (
+                "Las condiciones visibles configuradas coincidieron. Esto no demuestra por sí solo "
+                "un resultado externo; por ejemplo, texto visible no prueba que un mensaje se enviara."
+            ),
         }
 
 
@@ -483,7 +525,7 @@ def main(argv: list[str] | None = None) -> int:
             _print(engine.validate(_load_json(args.plan)))
         elif args.command == "run":
             plan = _load_json(args.plan)
-            _print(engine.validate(plan) if args.dry_run else engine.run_plan(plan))
+            _print(engine.run_plan(plan, dry_run=args.dry_run))
         elif args.command == "mcp":
             from mcp_server import serve
             return serve(engine)

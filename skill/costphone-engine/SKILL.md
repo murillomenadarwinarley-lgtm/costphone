@@ -18,7 +18,7 @@ Usa el motor solo si las herramientas MCP phone_inspect, phone_launch, phone_val
    - after.package y after.contains: prueba visible del resultado esperado.
 4. Usa IDs accesibles cuando sean fiables; de lo contrario, usa el texto visible exacto. No reutilices coordenadas ni referencias de snapshots anteriores.
 5. Para acciones que puedan enviar, publicar, borrar, pagar, llamar, compartir o confirmar, incluye action.requires con el destino y el contenido/contexto visible. El motor vuelve a leer la pantalla antes de esa acción. Si los efectos externos están bloqueados, no intentes eludirlo; comunica el bloqueo y deja que el usuario decida si modifica la configuración local.
-6. No declares que una tarea tuvo éxito solo porque el comando devolvió código cero. La etapa debe verificar su condición after.
+6. No declares que una tarea tuvo éxito solo porque el comando devolvió código cero. La etapa debe comprobar su condición after y el informe debe decir qué se verificó exactamente. Una coincidencia de texto accesible no demuestra por sí sola que un efecto externo (por ejemplo, enviar un mensaje) se completara. Si no hay evidencia específica del resultado en el contexto correcto, informa "resultado no verificado".
 7. Nunca repitas automáticamente una acción fallida ni vuelvas a ejecutar el plan completo si una etapa anterior pudo haber tenido efecto. Inspecciona el estado de forma segura y continúa solo si el estado lo permite.
 8. No supongas que WhatsApp u otra aplicación representa todas las tareas. El motor sirve para apps y flujos Android en general, dentro de los controles accesibles y los permisos concedidos.
 9. No uses acciones arbitrarias de shell, no desactives Accesibilidad/guardias, no borres datos, y no instales o modifiques software por iniciativa propia.
@@ -26,7 +26,7 @@ Usa el motor solo si las herramientas MCP phone_inspect, phone_launch, phone_val
 
 ## Plan JSON versión 1
 
-Antes de ejecutar un plan complejo, valida el JSON con phone_validate_plan. Para ejecutar una secuencia que incluya transiciones de pantalla, usa phone_run_plan una sola vez, con una verificación after por etapa. Para una operación de bajo riesgo, mantén las etapas cortas; para un efecto externo, verifica el destino y el contenido justo antes de actuar.
+Antes de ejecutar un plan complejo, valida el JSON con phone_validate_plan. Para previsualizarlo sin interacción con el teléfono, usa phone_run_plan con dry_run=true; esa opción está disponible por MCP y CLI, no debe confundirse con una ejecución real. Para ejecutar una secuencia que incluya transiciones de pantalla, usa phone_run_plan una sola vez, con una verificación after por etapa. Para una operación de bajo riesgo, mantén las etapas cortas; para un efecto externo, verifica el destino y el contenido justo antes de actuar. El resultado exitoso informa que coincidieron las condiciones visibles configuradas, no que un resultado externo quede demostrado automáticamente.
 
 Ejemplo de abrir la sección visible Network desde Ajustes:
 

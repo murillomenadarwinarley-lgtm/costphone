@@ -2,6 +2,7 @@
 """Unit tests for the isolated CostPhone Engine. No phone or network required."""
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -145,16 +146,44 @@ class EngineValidationTests(unittest.TestCase):
             validate_plan(plan, allow_external_effects=True)
         self.assertEqual(ctx.exception.code, "external_effect_needs_context")
 
+    def test_dry_run_does_not_bypass_sensitive_action_guard(self):
+        plan = simple_plan()
+        plan["steps"][0]["actions"] = [
+            {"kind": "click_id", "value": "com.example.app:id/send", "requires": ["Target chat", "Message draft"]}
+        ]
+        with self.assertRaises(EngineError) as ctx:
+            CostPhoneEngine(adapter=FakeAdapter([]), allow_external_effects=False).run_plan(plan, dry_run=True)
+        self.assertEqual(ctx.exception.code, "external_effect_blocked")
+
 
 class EngineExecutionTests(unittest.TestCase):
-    def test_executes_and_verifies_a_stage(self):
+    def test_dry_run_validates_without_inspecting_or_acting(self):
+        adapter = FakeAdapter([])
+        result = CostPhoneEngine(adapter=adapter, allow_external_effects=False).run_plan(
+            simple_plan(), dry_run=True
+        )
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["dry_run"])
+        self.assertFalse(result["executed"])
+        self.assertEqual(result["actions_executed"], 0)
+        self.assertEqual(result["actions_would_run"], 1)
+        self.assertEqual(adapter.inspect_calls, 0)
+        self.assertEqual(adapter.launch_calls, [])
+        self.assertEqual(adapter.actions, [])
+
+    def test_executes_and_reports_visible_postconditions_not_external_outcome(self):
         adapter = FakeAdapter([
             snap("com.example.app", "Home", "Settings"),
             snap("com.example.app", "Settings", "Saved"),
         ])
         result = CostPhoneEngine(adapter=adapter, allow_external_effects=False).run_plan(simple_plan())
-        self.assertTrue(result["verified"])
+        self.assertTrue(result["postconditions_matched"])
+        self.assertEqual(result["verification_scope"], "foreground_package_and_visible_accessibility_text")
+        self.assertEqual(result["external_effect_outcome"], "not_inferred")
+        self.assertNotIn("verified", result)
         self.assertEqual(result["steps_completed"], 1)
+        self.assertEqual(result["timings"]["total_ms"], result["elapsed_ms"])
+        self.assertEqual(len(result["timings"]["stages"]), 1)
         self.assertEqual(len(adapter.actions), 1)
         self.assertEqual(adapter.actions[0]["value"], "Settings")
 
@@ -191,7 +220,8 @@ class EngineExecutionTests(unittest.TestCase):
             snap("com.example.app", "Message sent"),
         ])
         result = CostPhoneEngine(adapter=adapter, allow_external_effects=True).run_plan(plan)
-        self.assertTrue(result["verified"])
+        self.assertTrue(result["postconditions_matched"])
+        self.assertEqual(result["external_effect_outcome"], "not_inferred")
         self.assertEqual(adapter.inspect_calls, 3)
         self.assertEqual(len(adapter.actions), 1)
 
@@ -220,7 +250,7 @@ class EngineExecutionTests(unittest.TestCase):
             snap("com.android.settings", "Settings", "Network"),
         ])
         result = CostPhoneEngine(adapter=adapter).run_plan(plan)
-        self.assertTrue(result["verified"])
+        self.assertTrue(result["postconditions_matched"])
         self.assertEqual(adapter.launch_calls, ["com.android.settings"])
 
 
@@ -231,6 +261,31 @@ class MCPProtocolTests(unittest.TestCase):
         tools = dispatch("tools/list", {}, CostPhoneEngine(adapter=FakeAdapter([])))
         names = {item["name"] for item in tools["result"]["tools"]}
         self.assertEqual(names, {"phone_inspect", "phone_launch", "phone_validate_plan", "phone_run_plan"})
+
+    def test_phone_run_plan_accepts_dry_run_without_phone_io(self):
+        adapter = FakeAdapter([])
+        engine = CostPhoneEngine(adapter=adapter)
+        reply = dispatch(
+            "tools/call",
+            {"name": "phone_run_plan", "arguments": {"plan": simple_plan(), "dry_run": True}},
+            engine,
+        )
+        payload = json.loads(reply["result"]["content"][0]["text"])
+        self.assertTrue(payload["ok"])
+        self.assertTrue(payload["dry_run"])
+        self.assertFalse(payload["executed"])
+        self.assertEqual(adapter.inspect_calls, 0)
+        self.assertEqual(adapter.actions, [])
+
+    def test_phone_run_plan_rejects_non_boolean_dry_run(self):
+        reply = dispatch(
+            "tools/call",
+            {"name": "phone_run_plan", "arguments": {"plan": simple_plan(), "dry_run": "false"}},
+            CostPhoneEngine(adapter=FakeAdapter([])),
+        )
+        payload = json.loads(reply["result"]["content"][0]["text"])
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"], "invalid_argument")
 
     def test_unknown_tool_is_rejected(self):
         result = dispatch("tools/call", {"name": "phone_shell", "arguments": {}}, CostPhoneEngine(adapter=FakeAdapter([])))
