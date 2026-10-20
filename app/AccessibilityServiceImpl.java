@@ -339,6 +339,33 @@ public class AccessibilityServiceImpl extends AccessibilityService {
     /* -------------------------------------------------------------- */
     /*                        Command dispatcher                      */
     /* -------------------------------------------------------------- */
+    private boolean matchesExpectedForeground(Intent intent) {
+        String expected = intent.getStringExtra("expectedPackage");
+        if (expected == null || expected.isEmpty()) return true;
+
+        AccessibilityNodeInfo root = rootFor(disp(intent));
+        String actual = "";
+        if (root != null) {
+            try {
+                CharSequence pkg = root.getPackageName();
+                actual = pkg == null ? "" : pkg.toString();
+            } catch (Throwable t) {
+                Log.w(TAG, "No se pudo validar expectedPackage", t);
+            } finally {
+                try { root.recycle(); } catch (Throwable ignored) { }
+            }
+        }
+        if (!expected.equals(actual)) {
+            String message = "GUARD expected=" + expected + " actual="
+                    + (actual.isEmpty() ? "unknown" : actual)
+                    + " action=" + intent.getAction();
+            Log.w(TAG, message);
+            try { ConnectionLog.add(message); } catch (Throwable ignored) { }
+            return false;
+        }
+        return true;
+    }
+
     private void handleCommand(Intent intent) {
         String action = intent.getAction();
         if (action == null) return;
@@ -348,6 +375,7 @@ public class AccessibilityServiceImpl extends AccessibilityService {
             Log.w(TAG, "rejected command with bad/missing secret: " + action);
             return;
         }
+        if (!matchesExpectedForeground(intent)) return;
         Log.d(TAG, "cmd: " + action);
         final long commandStart = android.os.SystemClock.elapsedRealtime();
 
