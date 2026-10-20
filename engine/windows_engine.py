@@ -86,7 +86,7 @@ def validate_coordinate(value: Any, label: str) -> int:
 def validate_control_selector(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise EngineError("invalid_selector", "selector debe ser un objeto con name y/o automation_id.")
-    allowed = {"name", "automation_id", "control_type", "occurrence"}
+    allowed = {"name", "automation_id", "control_type", "occurrence", "window_handle", "process_id"}
     extra = set(value) - allowed
     if extra:
         raise EngineError("invalid_selector", "El selector contiene propiedades no permitidas.", {"extra": sorted(extra)})
@@ -105,6 +105,11 @@ def validate_control_selector(value: Any) -> dict[str, Any]:
         if type(occurrence) is not int or not 0 <= occurrence < MAX_UI_CONTROLS:
             raise EngineError("invalid_selector", f"selector.occurrence debe ser un entero de 0 a {MAX_UI_CONTROLS - 1}.")
         selector["occurrence"] = occurrence
+    for field in ("window_handle", "process_id"):
+        item = value.get(field)
+        if type(item) is not int or item <= 0 or item > 0x7FFFFFFF_FFFFFFFF:
+            raise EngineError("invalid_selector", f"selector.{field} debe ser un identificador entero positivo.")
+        selector[field] = item
     return selector
 
 
@@ -213,7 +218,7 @@ class WindowsDesktopAdapter:
             "bounds": bounds,
         }
 
-    def _active_ui_controls(self) -> list[Any]:
+    def _active_ui_controls(self) -> tuple[dict[str, Any], list[Any]]:
         self._require_windows()
         window = self.inspect()
         hwnd = window.get("window_handle")
@@ -227,7 +232,7 @@ class WindowsDesktopAdapter:
             root = Desktop(backend="uia").window(handle=hwnd)
             if not root.exists(timeout=2):
                 raise EngineError("window_not_found", "La ventana activa ya no está disponible; inspecciona de nuevo.")
-            return root.descendants()
+            return window, root.descendants()
         except EngineError:
             raise
         except Exception as exc:
@@ -236,7 +241,7 @@ class WindowsDesktopAdapter:
     def list_controls(self, limit: int = 100) -> dict[str, Any]:
         if type(limit) is not int or not 1 <= limit <= MAX_UI_CONTROLS:
             raise EngineError("invalid_limit", f"limit debe ser un entero entre 1 y {MAX_UI_CONTROLS}.")
-        controls = self._active_ui_controls()
+        window, controls = self._active_ui_controls()
         items: list[dict[str, Any]] = []
         occurrences: dict[tuple[str, str, str], int] = {}
         visible_count = 0
@@ -262,20 +267,28 @@ class WindowsDesktopAdapter:
                 "automation_id": details["automation_id"],
                 "control_type": details["control_type"],
                 "occurrence": occurrence,
+                "window_handle": window["window_handle"],
+                "process_id": window["process_id"],
             }
-            items.append(details)
-            if len(items) >= limit:
-                break
+            if len(items) < limit:
+                items.append(details)
+        fresh = self.inspect()
+        if fresh.get("window_handle") != window["window_handle"] or fresh.get("process_id") != window["process_id"]:
+            raise EngineError("foreground_window_changed", "La ventana activa cambió mientras leía sus controles. Vuelve a inspeccionar antes de actuar.")
         return {
             "controls": items,
             "returned": len(items),
             "visible_descendants": visible_count,
-            "truncated": len(items) < visible_count and len(items) >= limit,
-            "selection_scope": "solo la ventana que estaba activa al iniciar esta consulta",
+            "truncated": len(items) < visible_count or visible_count > limit,
+            "window_handle": window["window_handle"],
+            "process_id": window["process_id"],
+            "selection_scope": "solo la ventana que estaba activa al iniciar esta consulta; los selectores incluyen su identidad para rechazar usos obsoletos",
         }
 
     def _resolve_control(self, selector: dict[str, Any]) -> tuple[Any, dict[str, Any]]:
-        controls = self._active_ui_controls()
+        window, controls = self._active_ui_controls()
+        if selector["window_handle"] != window.get("window_handle") or selector["process_id"] != window.get("process_id"):
+            raise EngineError("stale_selector", "El selector pertenece a otra ventana o proceso. Vuelve a inspeccionar los controles de la ventana activa.", {"selector_window_handle": selector["window_handle"], "current_window_handle": window.get("window_handle")})
         matches: list[tuple[Any, dict[str, Any]]] = []
         for control in controls:
             try:
@@ -304,6 +317,9 @@ class WindowsDesktopAdapter:
         index = occurrence if occurrence is not None else 0
         if index >= len(matches):
             raise EngineError("control_not_found", "No existe esa occurrence del control en la ventana activa.", {"selector": selector, "match_count": len(matches)})
+        fresh = self.inspect()
+        if fresh.get("window_handle") != selector["window_handle"] or fresh.get("process_id") != selector["process_id"]:
+            raise EngineError("stale_selector", "La ventana activa cambió antes de ejecutar la acción; no se tocará ningún control.", {"selector_window_handle": selector["window_handle"], "current_window_handle": fresh.get("window_handle")})
         return matches[index]
 
     def click_control(self, selector: dict[str, Any]) -> dict[str, Any]:
