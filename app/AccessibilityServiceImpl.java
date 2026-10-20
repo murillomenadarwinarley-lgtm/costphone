@@ -48,6 +48,7 @@ public class AccessibilityServiceImpl extends AccessibilityService {
     private static final String ACTION_PRESS_KEY = "com.accessdroid.termux.ACTION_PRESS_KEY";
     private static final String ACTION_SCREENDUMP = "com.accessdroid.termux.ACTION_SCREENDUMP";
     private static final String ACTION_GET_UI_TREE = "com.accessdroid.termux.ACTION_GET_UI_TREE";
+    private static final String ACTION_GET_FOREGROUND_PACKAGE = "com.accessdroid.termux.ACTION_GET_FOREGROUND_PACKAGE";
     // Extra actions for AI agent control
     private static final String ACTION_PINCH = "com.accessdroid.termux.ACTION_PINCH";
     private static final String ACTION_DOUBLE_TAP = "com.accessdroid.termux.ACTION_DOUBLE_TAP";
@@ -116,6 +117,21 @@ public class AccessibilityServiceImpl extends AccessibilityService {
     /* Save a file to the public Downloads collection (no storage permission needed). */
     private void saveToDownloads(String name, String mime, byte[] data) {
         try {
+            if (Build.VERSION.SDK_INT < 29) {
+                java.io.File downloads = android.os.Environment.getExternalStoragePublicDirectory(
+                        android.os.Environment.DIRECTORY_DOWNLOADS);
+                if (!downloads.exists() && !downloads.mkdirs()) {
+                    Log.w(TAG, "No se pudo crear Downloads para " + name);
+                    return;
+                }
+                java.io.File target = new java.io.File(downloads, name);
+                try (java.io.FileOutputStream os = new java.io.FileOutputStream(target, false)) {
+                    os.write(data);
+                    os.flush();
+                }
+                Log.i(TAG, "saved Download/" + name + " (" + data.length + " bytes)");
+                return;
+            }
             android.content.ContentValues cv = new android.content.ContentValues();
             cv.put(android.provider.MediaStore.Downloads.DISPLAY_NAME, name);
             cv.put(android.provider.MediaStore.Downloads.MIME_TYPE, mime);
@@ -163,6 +179,7 @@ public class AccessibilityServiceImpl extends AccessibilityService {
         filter.addAction(ACTION_PRESS_KEY);
         filter.addAction(ACTION_SCREENDUMP);
         filter.addAction(ACTION_GET_UI_TREE);
+        filter.addAction(ACTION_GET_FOREGROUND_PACKAGE);
         filter.addAction(ACTION_PINCH);
         filter.addAction(ACTION_DOUBLE_TAP);
         filter.addAction(ACTION_CLEAR_TEXT);
@@ -178,7 +195,17 @@ public class AccessibilityServiceImpl extends AccessibilityService {
         filter.addAction(ACTION_POWER);
         filter.addAction(ACTION_DISPLAY);
         filter.addAction(ACTION_DISPLAY_BACK);
-        registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED);
+        try {
+            if (Build.VERSION.SDK_INT >= 33) {
+                registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED);
+            } else {
+                registerReceiver(receiver, filter);
+            }
+        } catch (Throwable t) {
+            Log.e(TAG, "No se pudo registrar el receptor de comandos", t);
+            sInstance = null;
+            return;
+        }
         // Cargar configuración persistente de pantallas virtuales desde
         // Settings.Global overlay_display_devices. Si hay valor guardado,
         // aplicarlo como si el usuario hubiera ejecutado "on" desde amctl.
@@ -369,6 +396,29 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                             Log.i(TAG, "scrollTo '" + txt + "' → " + ok);
                         }
                     }
+                }
+                break;
+            }
+            case ACTION_GET_FOREGROUND_PACKAGE: {
+                int displayId = disp(intent);
+                AccessibilityNodeInfo root = rootFor(displayId);
+                String packageName = "";
+                if (root != null) {
+                    try {
+                        CharSequence name = root.getPackageName();
+                        packageName = name == null ? "" : name.toString();
+                    } catch (Throwable t) {
+                        Log.w(TAG, "No se pudo leer el paquete en primer plano", t);
+                    } finally {
+                        try { root.recycle(); } catch (Throwable ignored) { }
+                    }
+                }
+                String response = "# pkg=" + packageName + "\\n";
+                try {
+                    saveToDownloads("accessdroid-foreground.txt", "text/plain",
+                            response.getBytes("UTF-8"));
+                } catch (Exception e) {
+                    Log.w(TAG, "No se pudo guardar el paquete en primer plano", e);
                 }
                 break;
             }

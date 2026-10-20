@@ -123,7 +123,8 @@ EOF
 | Comando | Qué hace |
 |---|---|
 | `amctl session-start` | Abre la sesión persistente (FIFO + rish). **Solo el usuario** |
-| `amctl status` | Backend activo, si la sesión responde y estado de la guardia |
+| `amctl status` | Backend activo, guardia y prueba de conexión |
+| `amctl doctor` | Comprueba si el receptor de CostPhone responde, sin volcar el árbol UI |
 | `amctl session-stop` | Cierra la sesión (rish + tail + wrapper + FIFO) |
 
 - Con sesión, cada acción contra la app cuesta ~1 s en vez de ~3 s.
@@ -131,6 +132,8 @@ EOF
 - Si rish dice "Server is not running" o "Request timeout", amctl avisa una vez,
   deja la sesión y sigue por `am`: **no reintenta en bucle**.
 - `amctl status` es la primera comprobación si algo va lento o falla.
+- Si CostPhone no responde, ejecuta `amctl doctor`. Después abre Inicio → Reparar conexión y vuelve a activar CostPhone en Accesibilidad. Si Termux no ve los archivos compartidos, ejecuta `termux-setup-storage`.
+- Usa IDs/textos conocidos y agrupa pasos con `amctl batch`; no uses `snap` ni PNG entre cada toque.
 
 ## Modos: safe (por defecto) y full
 

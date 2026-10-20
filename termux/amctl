@@ -30,6 +30,7 @@
 #   session-start            Abre la sesión rish persistente (FIFO) — solo tú
 #   session-stop             Cierra la sesión rish (rish + tail + FIFO)
 #   status                   Backend activo + si la sesión responde
+#   doctor                   Comprueba que CostPhone responde sin volcar el árbol UI
 #   registro                 cada comando queda en ~/.amctl.log
 #   lista de bloqueo         ~/.config/amctl/blocked.txt (una app por línea)
 #   guardia                  todo tap/type/swipe/click/... va contra la app en primer
@@ -459,10 +460,10 @@ fg_pkg() {
             return 0
         fi
     fi
-    local f=/sdcard/Download/accessdroid-tree.txt line
+    local f=/sdcard/Download/accessdroid-foreground.txt line
     rm -f "$f" 2>/dev/null
-    bc_raw com.accessdroid.termux.ACTION_GET_UI_TREE || return 1
-    wait_file "$f" 5 || return 1
+    bc_raw com.accessdroid.termux.ACTION_GET_FOREGROUND_PACKAGE || return 1
+    wait_file "$f" 3 || return 1
     IFS= read -r line < "$f" || return 1
     [[ "$line" =~ ^\#[[:space:]]*pkg=([A-Za-z0-9_.]+)[[:space:]]*$ ]] || return 1
     printf '%s' "${BASH_REMATCH[1]}"
@@ -795,6 +796,7 @@ cmd_status() {
     [[ -f "$AMCTL_GUARD_OFF" ]] && gst="DESACTIVADA por el usuario"
     echo "guardia       : $gst"
     echo "salida sesión : $AMCTL_OUT"
+    cmd_doctor || true
 }
 
 cmd_list() {
@@ -883,8 +885,57 @@ cmd_perms()  { need_socket perms || return $?; local pkg; pkg=$(resolve_pkg "$1"
 cmd_grant()  { need_socket grant || return $?; local pkg; pkg=$(resolve_pkg "$1") || return $?; shift; local perm="$1"; tam pm grant "$pkg" "$perm" 2>/dev/null && echo "Granted $perm to $pkg"; }
 cmd_revoke() { need_socket revoke || return $?; local p; p=$(resolve_pkg "$1") || return $?; shift; local perm; tam pm revoke "${p}" "${1:-}" 2>/dev/null; }
 cmd_clear()  { need_socket clear || return $?; local pkg; pkg=$(resolve_pkg "$1") || return $?; tam clear package "$pkg" 2>/dev/null && echo "Cleared $pkg"; }
-cmd_tree()   { local f=/sdcard/Download/accessdroid-tree.txt; guard_readonly tree || return $?; rm -f "$f"; bc_raw com.accessdroid.termux.ACTION_GET_UI_TREE; wait_file "$f" 5 && { cat "$f"; return 0; }; echo "(⚠ SERVICIO NO RESPONDE — actívalo en Ajustes → Accesibilidad → CostPhone)"; return 1; }
-cmd_snap()   { local f=/sdcard/Download/accessdroid-tree.txt; guard_readonly snap || return $?; rm -f "$f"; bc_raw com.accessdroid.termux.ACTION_GET_UI_TREE; wait_file "$f" 5 || { echo "(⚠ SERVICIO NO RESPONDE — actívalo en Ajustes → Accesibilidad → CostPhone)" >&2; return 1; }; python3 "$HOME/bin/amctl-snap.py" --display "$DISPLAY_ID" "$@"; }
+fetch_tree_file() {
+    local f=/sdcard/Download/accessdroid-tree.txt
+    rm -f "$f" 2>/dev/null
+    bc_raw com.accessdroid.termux.ACTION_GET_UI_TREE || return 1
+    wait_file "$f" 5 || return 1
+    return 0
+}
+
+cmd_doctor() {
+    local f=/sdcard/Download/accessdroid-foreground.txt line
+    rm -f "$f" 2>/dev/null
+    if ! bc_raw com.accessdroid.termux.ACTION_GET_FOREGROUND_PACKAGE; then
+        echo "CostPhone: fallo al enviar la prueba de conexión." >&2
+        return 1
+    fi
+    if ! wait_file "$f" 3; then
+        echo "CostPhone: SIN RESPUESTA del servicio de accesibilidad." >&2
+        echo "Abre CostPhone → Inicio → Reparar conexión y vuelve a activar CostPhone en Ajustes → Accesibilidad." >&2
+        echo "Si Termux no ve los archivos compartidos, ejecuta termux-setup-storage y concede el permiso." >&2
+        return 1
+    fi
+    IFS= read -r line < "$f" || line=""
+    if [[ "$line" =~ ^\#[[:space:]]*pkg=([A-Za-z0-9_.]+)[[:space:]]*$ ]]; then
+        echo "CostPhone: CONECTADO"
+        echo "App en primer plano: ${BASH_REMATCH[1]}"
+        return 0
+    fi
+    echo "CostPhone respondió, pero no detectó una ventana activa." >&2
+    return 2
+}
+
+cmd_tree() {
+    local f=/sdcard/Download/accessdroid-tree.txt
+    guard_readonly tree || return $?
+    rm -f "$f" 2>/dev/null
+    fetch_tree_file || {
+        echo "(⚠ CostPhone no respondió al leer el árbol UI)" >&2
+        return 1
+    }
+    cat "$f"
+}
+cmd_snap() {
+    local f=/sdcard/Download/accessdroid-tree.txt
+    guard_readonly snap || return $?
+    rm -f "$f" 2>/dev/null
+    fetch_tree_file || {
+        echo "(⚠ CostPhone no respondió al leer el árbol UI)" >&2
+        return 1
+    }
+    python3 "$HOME/bin/amctl-snap.py" --display "$DISPLAY_ID" "$@"
+}
 
 cmd_tapref() {
     local ref="${1:-}"
@@ -1451,6 +1502,7 @@ case "${1:-help}" in
     session-start) cmd_start ;;
     session-stop)  cmd_stop_session ;;
     status)        cmd_status ;;
+    doctor|ping)   cmd_doctor ;;
     list)      cmd_list "${2:-}" ;;
     find)      cmd_find "${2:-}" ;;
     launch)    cmd_launch "${2:-}" ;;
