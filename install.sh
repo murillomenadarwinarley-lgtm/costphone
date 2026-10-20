@@ -18,9 +18,7 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN="$HOME/bin"
 SKILL_DIR="$HOME/.config/opencode/skills/android/phone-control"
 AGENTS="$HOME/.config/opencode/AGENTS.md"
-APK_SRC="$(ls -1 "$REPO_DIR"/apk/CostPhone-v*.apk 2>/dev/null | sort -V | tail -1 || true)"
-[[ -z "$APK_SRC" ]] && APK_SRC="$REPO_DIR/app/build/CostPhone.apk"
-APK_DEST="/sdcard/Download/$(basename "$APK_SRC")"
+APK_SRC=""
 
 G='\033[0;32m'; Y='\033[1;33m'; R='\033[0;31m'; N='\033[0m'
 step() { echo -e "${G}[+]${N} $*"; }
@@ -89,24 +87,58 @@ fi
 
 # --- 6. APK ----------------------------------------------------------------
 step "6/6  Instalando la app CostPhone (servicio de accesibilidad)..."
-if [ -f "$APK_SRC" ]; then
+
+# Nunca prefieras la APK heredada solo porque su nombre de versión es mayor.
+# El instalador debe usar primero el build actual (v1.3 + Shizuku + handshake).
+CURRENT_APK="$REPO_DIR/app/build/CostPhone.apk"
+if [[ -s "$CURRENT_APK" ]]; then
+    APK_SRC="$CURRENT_APK"
+elif command -v gradle >/dev/null 2>&1 && [[ -s "${ANDROID_HOME:-$HOME/android-sdk}/platforms/android-36/android.jar" ]]; then
+    step "No hay APK actual; compilando CostPhone v1.3 desde el código..."
+    if (cd "$REPO_DIR/app" && bash build.sh); then
+        [[ -s "$CURRENT_APK" ]] && APK_SRC="$CURRENT_APK"
+    else
+        warn "La compilación falló; no se instalará silenciosamente una APK antigua."
+    fi
+fi
+
+if [[ -z "$APK_SRC" ]]; then
+    LEGACY_APK="$(ls -1 "$REPO_DIR"/apk/CostPhone-v*.apk 2>/dev/null | sort -V | tail -1 || true)"
+    if [[ -n "$LEGACY_APK" && -s "$LEGACY_APK" ]]; then
+        warn "Solo está disponible la APK heredada $(basename "$LEGACY_APK"); no contiene la nueva integración Shizuku ni el diagnóstico de conexión."
+        if [[ -t 0 ]]; then
+            read -r -p "¿Instalar esa versión antigua para usar el modo clásico de Accesibilidad/Termux? [s/N] " legacy_choice
+            [[ "$legacy_choice" =~ ^[sS]$ ]] && APK_SRC="$LEGACY_APK"
+        elif [[ "${COSTPHONE_ALLOW_LEGACY_APK:-0}" == "1" ]]; then
+            APK_SRC="$LEGACY_APK"
+        else
+            warn "No se instala una APK antigua sin confirmación. Compila primero con 'cd app && bash build.sh' o descarga el APK actual desde la ejecución de GitHub Actions."
+        fi
+    else
+        warn "No se encontró CostPhone.apk. Compila con 'cd app && bash build.sh' o descarga el APK actual desde GitHub Actions."
+    fi
+fi
+
+if [[ -n "$APK_SRC" && -s "$APK_SRC" ]]; then
+    APK_DEST="/sdcard/Download/$(basename "$APK_SRC")"
     cp "$APK_SRC" "$APK_DEST"
+    echo "     APK seleccionada: $APK_SRC"
     termux-open "$APK_DEST" 2>/dev/null || warn "Abre manualmente: $APK_DEST"
     echo ""
     echo "  ┌─────────────────────────────────────────────────┐"
     echo "  │  EN EL TELÉFONO:                                │"
     echo "  │   1. Toca 'Instalar'                            │"
-    echo "  │      (si Play Protect avisa: Entendido)         │"
     echo "  │   2. Ajustes → Accesibilidad → CostPhone        │"
     echo "  │      → Activar y confirmar                      │"
+    echo "  │   3. Abre CostPhone → Conexión → Doctor         │"
+    echo "  │      y ejecuta 'amctl doctor' en Termux         │"
     echo "  └─────────────────────────────────────────────────┘"
-else
-    warn "No encontré el APK en $APK_SRC"
 fi
 
 echo ""
 echo "══════════════════════════════════════════════════"
-echo "  LISTO — prueba con:   amctl tree   (o: amctl see)"
-echo "  Si dice '⚠ SERVICIO NO RESPONDE', activa CostPhone"
-echo "  en Ajustes → Accesibilidad y reintenta."
+echo "  PRUEBA DE CONEXIÓN: amctl doctor"
+echo "  Después: amctl snap"
+echo "  Si doctor no responde, revisa Accesibilidad y vuelve a instalar"
+echo "  la APK actual (no uses una APK heredada si buscas Shizuku)."
 echo "══════════════════════════════════════════════════"
