@@ -80,6 +80,17 @@ public class SettingsActivity extends Activity {
     private LinearLayout contentArea;
 
     private Handler handler = new Handler(Looper.getMainLooper());
+    private int statusRefreshRetries = 0;
+    private final Runnable connectionRefreshRunnable = new Runnable() {
+        @Override public void run() {
+            refreshStatus();
+            refreshShizuku();
+            if (serviceState() != 2 && statusRefreshRetries > 0) {
+                statusRefreshRetries--;
+                handler.postDelayed(this, 700L);
+            }
+        }
+    };
     private SharedPreferences prefs;
 
     private static final int REQ_SHIZUKU_PERMISSION = 41;
@@ -252,11 +263,26 @@ public class SettingsActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         requestNotificationPermission();
+        requestLegacyStoragePermission();
         refreshStatus();
         refreshShizuku();
+        handler.removeCallbacks(connectionRefreshRunnable);
+        statusRefreshRetries = 5;
+        handler.postDelayed(connectionRefreshRunnable, 300L);
     }
 
     private static final int REQ_POST_NOTIFICATIONS = 42;
+    private static final int REQ_LEGACY_STORAGE = 43;
+
+    private void requestLegacyStoragePermission() {
+        if (Build.VERSION.SDK_INT < 23 || Build.VERSION.SDK_INT > 28) return;
+        if (checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                == PackageManager.PERMISSION_GRANTED) return;
+        try {
+            requestPermissions(new String[]{android.Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                    REQ_LEGACY_STORAGE);
+        } catch (Throwable ignored) { }
+    }
 
     private void requestNotificationPermission() {
         if (Build.VERSION.SDK_INT < 33) return;
@@ -363,151 +389,189 @@ public class SettingsActivity extends Activity {
 
     private LinearLayout buildInicioPanel() {
         LinearLayout panel = createPanel();
+        panel.addView(welcomeHero(), lpMATCH(5));
 
-        // chip Shizuku (antes barra fija en header)
-        panel.addView(shizukuChip(), lpMATCH(0));
-
-        // ── Tarjeta de estado grande: icono en aro + Conectado + descripción ──
         LinearLayout statusCard = Ui.card(this);
-        GradientDrawable statusHeroBg = new GradientDrawable(
+        GradientDrawable statusBg = new GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
                 new int[]{Ui.color(this, "hero"), Ui.color(this, "surface")});
-        statusHeroBg.setCornerRadius(dp(22));
-        statusHeroBg.setStroke(dp(1), Ui.color(this, "outline_accent"));
-        statusCard.setBackground(statusHeroBg);
-        statusCard.setElevation(dp(3));
+        statusBg.setCornerRadius(dp(22));
+        statusBg.setStroke(dp(1), Ui.color(this, "outline_accent"));
+        statusCard.setBackground(statusBg);
+        statusCard.setElevation(dp(2));
+        statusCard.setPadding(dp(16), dp(16), dp(16), dp(16));
 
-        LinearLayout heroRow = new LinearLayout(this);
-        heroRow.setOrientation(LinearLayout.HORIZONTAL);
-        heroRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout statusRow = new LinearLayout(this);
+        statusRow.setOrientation(LinearLayout.HORIZONTAL);
+        statusRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout iconRing = new LinearLayout(this);
+        iconRing.setGravity(Gravity.CENTER);
+        iconRing.setBackground(Ui.shape(this, "surface2", 17f, "outline_accent", 1.5f));
+        ImageView statusIcon = new ImageView(this);
+        statusIcon.setImageResource(R.drawable.ic_connected);
+        statusIcon.setColorFilter(ACCENT_GREEN);
+        iconRing.addView(statusIcon, new LinearLayout.LayoutParams(dp(28), dp(28)));
+        statusRow.addView(iconRing, new LinearLayout.LayoutParams(dp(54), dp(54)));
 
-        // icono en aro
-        LinearLayout ring = new LinearLayout(this);
-        ring.setGravity(Gravity.CENTER);
-        ring.setBackground(Ui.shape(this, "surface2", 999f, "outline_accent", 2f));
-        ImageView heroIcon = new ImageView(this);
-        heroIcon.setImageResource(R.drawable.ic_connected);
-        heroIcon.setColorFilter(ACCENT_GREEN);
-        ring.addView(heroIcon, new LinearLayout.LayoutParams(dp(32), dp(32)));
-        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(dp(64), dp(64));
-        heroRow.addView(ring, rlp);
-
-        LinearLayout textBlock = new LinearLayout(this);
-        textBlock.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams tblp = new LinearLayout.LayoutParams(
+        LinearLayout statusCopy = new LinearLayout(this);
+        statusCopy.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams statusCopyLp = new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-        tblp.leftMargin = dp(16);
-        heroRow.addView(textBlock, tblp);
+        statusCopyLp.leftMargin = dp(13);
+        statusRow.addView(statusCopy, statusCopyLp);
+
+        TextView eyebrow = new TextView(this);
+        eyebrow.setText("ESTADO DEL SISTEMA");
+        eyebrow.setTextSize(9);
+        eyebrow.setLetterSpacing(0.09f);
+        eyebrow.setTextColor(TEXT_MUTED);
+        eyebrow.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        statusCopy.addView(eyebrow);
 
         tvStatus = new TextView(this);
-        tvStatus.setTextSize(20);
+        tvStatus.setTextSize(18);
         tvStatus.setTextColor(TEXT_MAIN);
-        tvStatus.setTypeface(Typeface.DEFAULT_BOLD);
-        textBlock.addView(tvStatus);
+        tvStatus.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
+        statusCopy.addView(tvStatus, lpMATCH(3));
 
         tvStatusDesc = new TextView(this);
-        tvStatusDesc.setTextSize(13);
+        tvStatusDesc.setTextSize(12);
         tvStatusDesc.setTextColor(TEXT_DIM);
-        tvStatusDesc.setMaxLines(3);
+        tvStatusDesc.setMaxLines(2);
         tvStatusDesc.setEllipsize(TextUtils.TruncateAt.END);
-        LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        dlp.topMargin = dp(4);
-        textBlock.addView(tvStatusDesc, dlp);
+        statusCopy.addView(tvStatusDesc, lpMATCH(3));
 
-        statusCard.addView(heroRow);
-        heroStatusIcon = heroIcon;
+        statusCard.addView(statusRow);
+        heroStatusIcon = statusIcon;
         statusCardRef = statusCard;
-
-        // dot oculto para compatibilidad con refreshStatus (statusDot)
         statusDot = new View(this);
         statusDot.setVisibility(View.GONE);
         statusCard.addView(statusDot, lp(0, 0, 0));
 
-        // botón: ghost si conectado, primario si no
-        View a11yBtn = a11yButton(serviceState() == 2);
-        LinearLayout.LayoutParams ablp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        ablp.topMargin = dp(16);
+        View accessButton = a11yButton(serviceState());
         a11yBtnIndex = statusCard.getChildCount();
-        statusCard.addView(a11yBtn, ablp);
-
+        statusCard.addView(accessButton, lpMATCH(13));
         panel.addView(statusCard, lpMATCH(12));
 
-        // ── Acciones rápidas: 3 tiles que EJECUTAN ──
-        panel.addView(Ui.sectionHeader(this, R.drawable.ic_bolt, "Acciones rápidas"), lpMATCH(4));
+        panel.addView(sectionTitle("EXPLORA COSTPHONE"), lpMATCH(4));
+        panel.addView(featureRow("Control del dispositivo",
+                "Toca, navega, desliza y escribe desde Termux.",
+                R.drawable.ic_control, ACCENT_BLUE, new View.OnClickListener() {
+                    @Override public void onClick(View v) { showTab(TAB_CONTROL); }
+                }), sectionCardLp());
+        panel.addView(featureRow("Inspector de pantalla",
+                "Busca por texto o ID; captura solo cuando haga falta.",
+                R.drawable.ic_inspector, ACCENT_VIOLET, new View.OnClickListener() {
+                    @Override public void onClick(View v) { showTab(TAB_INSPECTOR); }
+                }), sectionCardLp());
+        panel.addView(featureRow("Rutinas y secuencias",
+                "Agrupa acciones frecuentes y ejecútalas con menos pausas.",
+                R.drawable.ic_routines, ACCENT_GREEN, new View.OnClickListener() {
+                    @Override public void onClick(View v) { showTab(TAB_RUTINAS); }
+                }), sectionCardLp());
 
-        LinearLayout qa = new LinearLayout(this);
-        qa.setOrientation(LinearLayout.HORIZONTAL);
-        qa.addView(actionTile("Leer UI", R.drawable.ic_tree, new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                if (isServiceAvailable()) sendGetUiTree();
-                else toast("Activa el servicio de accesibilidad primero");
-            }
-        }), gridTileLp());
-        qa.addView(actionTile("Buscar", R.drawable.ic_search, new View.OnClickListener() {
-            @Override public void onClick(View v) { showTab(TAB_INSPECTOR); }
-        }), gridTileLp());
-        qa.addView(actionTile("Scroll", R.drawable.ic_arrow_down, new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                if (isServiceAvailable()) sendScrollDown();
-                else toast("Activa el servicio de accesibilidad primero");
-            }
-        }), gridTileLp());
-        panel.addView(qa, gridRowLp());
-
-        // ── Actividad reciente: últimos 3 eventos + "Ver todo" ──
-        LinearLayout recentHeader = Ui.sectionHeader(this, R.drawable.ic_clock, "Actividad reciente");
-        TextView verTodo = new TextView(this);
-        verTodo.setText("Ver todo");
-        verTodo.setTextSize(13);
-        verTodo.setTextColor(ACCENT_BLUE);
-        verTodo.setTypeface(Typeface.DEFAULT_BOLD);
-        verTodo.setPadding(dp(8), dp(4), dp(8), dp(4));
-        verTodo.setMinHeight(dp(48));
-        verTodo.setGravity(Gravity.CENTER_VERTICAL);
-        verTodo.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { showTab(TAB_AJUSTES); }
-        });
-        LinearLayout.LayoutParams vhlp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        vhlp.gravity = Gravity.END;
-        recentHeader.addView(verTodo, vhlp);
-        panel.addView(recentHeader, lpMATCH(4));
-
-        LinearLayout recentCard = Ui.card(this);
-        java.util.List<String> recent = ConnectionLog.dump();
-        int start = Math.max(0, recent.size() - 3);
-        if (recent.isEmpty()) {
-            TextView none = new TextView(this);
-            none.setText("Sin actividad todavía.");
-            none.setTextSize(13);
-            none.setTextColor(TEXT_MUTED);
-            recentCard.addView(none);
-        } else {
-            for (int i = recent.size() - 1; i >= start; i--) {
-                String line = recent.get(i);
-                String hora = line.length() >= 8 ? line.substring(0, 8) : "";
-                String msg = line.length() > 10 ? line.substring(10) : line;
-                String tipo = msg.contains("error") ? "error"
-                        : msg.contains("envió") || msg.contains("envio") ? "info"
-                        : msg.contains("Servicio") || msg.contains("servicio") ? "ok" : "text3";
-                recentCard.addView(Ui.logRow(this, tipo, hora, msg), lpMATCH(0));
-            }
-        }
-        panel.addView(recentCard, lpMATCH(12));
-
+        TextView footer = new TextView(this);
+        footer.setText("COSTPHONE  ·  CONTROL LOCAL PARA ANDROID");
+        footer.setTextSize(9);
+        footer.setLetterSpacing(0.05f);
+        footer.setTextColor(TEXT_MUTED);
+        footer.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams footerLp = lpMATCH(10);
+        footerLp.bottomMargin = dp(10);
+        panel.addView(footer, footerLp);
         return panel;
     }
 
-    private View a11yButton(boolean connected) {
+    private View welcomeHero() {
+        LinearLayout hero = new LinearLayout(this);
+        hero.setOrientation(LinearLayout.HORIZONTAL);
+        hero.setGravity(Gravity.CENTER_VERTICAL);
+        hero.setPadding(dp(17), dp(18), dp(13), dp(18));
+        GradientDrawable bg = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                new int[]{Ui.color(this, "hero"), Ui.color(this, "surface")});
+        bg.setCornerRadius(dp(24));
+        bg.setStroke(dp(1), Ui.color(this, "outline_accent"));
+        hero.setBackground(bg);
+        hero.setElevation(dp(2));
+
+        LinearLayout copy = new LinearLayout(this);
+        copy.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams copyLp = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        copyLp.rightMargin = dp(8);
+        hero.addView(copy, copyLp);
+
+        TextView eyebrow = new TextView(this);
+        eyebrow.setText("CONTROL INTELIGENTE");
+        eyebrow.setTextSize(9);
+        eyebrow.setLetterSpacing(0.09f);
+        eyebrow.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        eyebrow.setTextColor(ACCENT_BLUE);
+        copy.addView(eyebrow);
+
+        TextView headline = new TextView(this);
+        android.text.SpannableString headlineText =
+                new android.text.SpannableString("Tu IA trabaja\\npor ti.");
+        int accentStart = headlineText.toString().indexOf("por ti.");
+        headlineText.setSpan(new android.text.style.ForegroundColorSpan(ACCENT_BLUE),
+                accentStart, headlineText.length(),
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        headline.setText(headlineText);
+        headline.setTextSize(23);
+        headline.setLineSpacing(dp(1), 1f);
+        headline.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
+        headline.setTextColor(TEXT_MAIN);
+        headline.setMaxLines(2);
+        copy.addView(headline, lpMATCH(5));
+
+        TextView description = new TextView(this);
+        description.setText("Tu teléfono, al alcance de tu agente desde Termux.");
+        description.setTextSize(12);
+        description.setTextColor(TEXT_DIM);
+        description.setMaxLines(2);
+        description.setEllipsize(TextUtils.TruncateAt.END);
+        copy.addView(description, lpMATCH(7));
+
+        LinearLayout tags = new LinearLayout(this);
+        tags.setOrientation(LinearLayout.HORIZONTAL);
+        tags.setGravity(Gravity.CENTER_VERTICAL);
+        tags.addView(heroTag("INTEGRACIÓN TERMUX"), lpWRAP(0));
+        tags.addView(heroTag("SIN ROOT"), lpWRAP(0));
+        copy.addView(tags, lpMATCH(0));
+
+        ImageView illustration = new ImageView(this);
+        illustration.setImageResource(R.drawable.ic_ai_orbit);
+        illustration.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        illustration.setContentDescription("Ilustración de CostPhone");
+        hero.addView(illustration, new LinearLayout.LayoutParams(dp(82), dp(82)));
+        return hero;
+    }
+
+    private View heroTag(String label) {
+        TextView tag = new TextView(this);
+        tag.setText(label);
+        tag.setTextSize(7.5f);
+        tag.setLetterSpacing(0.015f);
+        tag.setTextColor(TEXT_DIM);
+        tag.setPadding(dp(7), dp(5), dp(7), dp(5));
+        tag.setBackground(rounded((ACCENT_BLUE & 0x00FFFFFF) | 0x18000000,
+                999, Ui.color(this, "outline_accent")));
+        return tag;
+    }
+
+    private View a11yButton(int state) {
         final View.OnClickListener go = new View.OnClickListener() {
             @Override public void onClick(View v) {
-                startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+                try { startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)); }
+                catch (Throwable t) { toast("No se pudieron abrir los ajustes de accesibilidad"); }
             }
         };
-        if (connected) {
-            return Ui.ghostButton(this, R.drawable.ic_accessibility, "Ajustes de accesibilidad", go);
+        if (state == 2) {
+            return Ui.ghostButton(this, R.drawable.ic_accessibility, "Gestionar accesibilidad", go);
+        }
+        if (state == 1) {
+            return Ui.primaryButton(this, R.drawable.ic_accessibility, "Reparar conexión", go);
         }
         return Ui.primaryButton(this, R.drawable.ic_accessibility, "Activar accesibilidad", go);
     }
@@ -550,6 +614,64 @@ public class SettingsActivity extends Activity {
         return tile;
     }
 
+    private View featureRow(String title, String description, int iconRes, int accent,
+                             View.OnClickListener onClick) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(12), dp(12), dp(10), dp(12));
+        row.setMinimumHeight(dp(78));
+        row.setBackground(Ui.ripple(this,
+                Ui.shape(this, "surface2", 19f, "border", 1f),
+                Ui.shape(this, "hero", 19f, "outline_accent", 1f),
+                (accent & 0x00FFFFFF) | 0x26000000));
+        row.setClickable(true);
+        row.setFocusable(true);
+        row.setOnClickListener(onClick);
+
+        LinearLayout iconShell = new LinearLayout(this);
+        iconShell.setGravity(Gravity.CENTER);
+        iconShell.setBackground(rounded((accent & 0x00FFFFFF) | 0x22000000,
+                14, (accent & 0x00FFFFFF) | 0x60000000));
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(iconRes);
+        icon.setColorFilter(accent);
+        iconShell.addView(icon, new LinearLayout.LayoutParams(dp(24), dp(24)));
+        row.addView(iconShell, new LinearLayout.LayoutParams(dp(44), dp(44)));
+
+        LinearLayout copy = new LinearLayout(this);
+        copy.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams copyLp = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        copyLp.leftMargin = dp(12);
+        copyLp.rightMargin = dp(8);
+        row.addView(copy, copyLp);
+
+        TextView label = new TextView(this);
+        label.setText(title);
+        label.setTextSize(14);
+        label.setTextColor(TEXT_MAIN);
+        label.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        label.setMaxLines(1);
+        label.setEllipsize(TextUtils.TruncateAt.END);
+        copy.addView(label);
+
+        TextView summary = new TextView(this);
+        summary.setText(description);
+        summary.setTextSize(11);
+        summary.setTextColor(TEXT_DIM);
+        summary.setMaxLines(2);
+        summary.setEllipsize(TextUtils.TruncateAt.END);
+        copy.addView(summary, lpMATCH(3));
+
+        ImageView arrow = new ImageView(this);
+        arrow.setImageResource(R.drawable.ic_chevron_right);
+        arrow.setColorFilter(TEXT_MUTED);
+        row.addView(arrow, new LinearLayout.LayoutParams(dp(20), dp(20)));
+        row.setContentDescription(title + ". " + description);
+        return row;
+    }
+
     private LinearLayout.LayoutParams gridRowLp() {
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -571,6 +693,9 @@ public class SettingsActivity extends Activity {
 
     private LinearLayout buildControlPanel() {
         LinearLayout panel = createPanel();
+        panel.addView(pageIntro("CONTROL DEL DISPOSITIVO",
+                "Hazlo directamente", "Gestos, navegación y escritura con menos pasos.",
+                R.drawable.ic_control, ACCENT_BLUE), lpMATCH(3));
 
         // ── Gestos ──
         LinearLayout gesturesCard = sectionCard("Gestos", R.drawable.ic_touch);
@@ -844,6 +969,9 @@ public class SettingsActivity extends Activity {
 
     private LinearLayout buildInspectorPanel() {
         LinearLayout panel = createPanel();
+        panel.addView(pageIntro("INSPECTOR DE PANTALLA",
+                "Encuentra y actúa", "Primero texto o ID; captura solo cuando haga falta.",
+                R.drawable.ic_inspector, ACCENT_VIOLET), lpMATCH(3));
 
         // ── Árbol de accesibilidad ──
         LinearLayout treeCard = sectionCard("Árbol de accesibilidad", R.drawable.ic_tree);
@@ -926,19 +1054,6 @@ public class SettingsActivity extends Activity {
 
         panel.addView(findCard, sectionCardLp());
 
-        // ── Estado de operaciones ──
-        LinearLayout opsCard = sectionCard("Estado de operaciones", R.drawable.ic_pulse);
-        TextView tvOps = new TextView(this);
-        tvOps.setText("Los resultados se confirman leyendo los archivos generados o el ConnectionLog. El envío del broadcast no confirma ejecución.");
-        tvOps.setTextSize(12);
-        tvOps.setTextColor(TEXT_DIM);
-        tvOps.setMaxLines(3);
-        tvOps.setEllipsize(TextUtils.TruncateAt.END);
-        tvOps.setPadding(dp(4), dp(4), dp(4), dp(4));
-        opsCard.addView(tvOps, cardLp());
-
-        panel.addView(opsCard, sectionCardLp());
-
         return panel;
     }
 
@@ -948,6 +1063,9 @@ public class SettingsActivity extends Activity {
 
     private LinearLayout buildRutinasPanel() {
         LinearLayout panel = createPanel();
+        panel.addView(pageIntro("AUTOMATIZACIÓN",
+                "Menos pasos, más trabajo", "Agrupa acciones repetidas y ejecútalas en secuencia.",
+                R.drawable.ic_routines, ACCENT_GREEN), lpMATCH(3));
 
         // ── Rutinas guardadas ──
         LinearLayout listCard = sectionCard("Rutinas guardadas", R.drawable.ic_routines);
@@ -1163,7 +1281,7 @@ public class SettingsActivity extends Activity {
     }
 
     private void showRoutineEditor(final String[] routine) {
-        LinearLayout editor = (LinearLayout) panelRutinas.getChildAt(1);
+        LinearLayout editor = (LinearLayout) panelRutinas.getChildAt(2);
         EditText etRoutineName = null;
         EditText etAction = null;
         EditText etParam = null;
@@ -1213,6 +1331,7 @@ public class SettingsActivity extends Activity {
             return;
         }
         toast("Ejecutando '" + routine[0] + "' (" + stepCount + " pasos). Los resultados se confirman por ConnectionLog.");
+        long offsetMs = 0L;
         for (int i = 1; i < routine.length; i += 2) {
             final String action = routine[i];
             final String param = i + 1 < routine.length ? routine[i + 1] : "";
@@ -1220,7 +1339,30 @@ public class SettingsActivity extends Activity {
                 @Override public void run() {
                     dispatchAction(action, param);
                 }
-            }, (i / 2) * 1500L);
+            }, offsetMs);
+            offsetMs += routineStepDelayMs(action);
+        }
+    }
+
+    private long routineStepDelayMs(String action) {
+        if (action == null) return 450L;
+        switch (action.toLowerCase()) {
+            case "type":
+            case "cleartext":
+            case "paste": return 350L;
+            case "clicktext":
+            case "clickid":
+            case "tap": return 550L;
+            case "swipe":
+            case "longpress":
+            case "back":
+            case "home":
+            case "recents":
+            case "scrolldown": return 700L;
+            case "screenshot":
+            case "screenshotdump":
+            case "tree": return 450L;
+            default: return 500L;
         }
     }
 
@@ -1407,6 +1549,10 @@ public class SettingsActivity extends Activity {
 
     private LinearLayout buildAjustesPanel() {
         LinearLayout panel = createPanel();
+        panel.addView(pageIntro("SISTEMA Y CONEXIÓN",
+                "Todo bajo control", "Permisos, Shizuku, batería y registro de errores.",
+                R.drawable.ic_settings, ACCENT_AMBER), lpMATCH(3));
+        panel.addView(shizukuChip(), lpMATCH(8));
 
         // ── Batería: chip de estado real + acción ──
         LinearLayout batCard = sectionCard("Batería", R.drawable.ic_battery);
@@ -1745,6 +1891,12 @@ public class SettingsActivity extends Activity {
     }
 
     private void sendBroadcastWithExtras(String action, String[] keys, String[] values) {
+        if (!isServiceAvailable()) {
+            refreshStatus();
+            ConnectionLog.add("UI error: " + action + " — servicio de accesibilidad desconectado");
+            toast("CostPhone no está conectado. Pulsa Reparar conexión en Inicio.");
+            return;
+        }
         if (keys == null || values == null || keys.length != values.length) {
             toast("Error interno: parámetros inconsistentes");
             return;
@@ -1824,7 +1976,7 @@ public class SettingsActivity extends Activity {
             case 1:
                 color = ACCENT_AMBER;
                 text = "Habilitado, sin conexión";
-                desc = "El servicio está activado pero no ha establecido conexión todavía.";
+                desc = "Android conserva el permiso, pero el servicio no se ha enlazado. Pulsa Reparar conexión y vuelve a activar CostPhone en Accesibilidad.";
                 break;
             default:
                 color = ACCENT_RED;
@@ -1853,7 +2005,7 @@ public class SettingsActivity extends Activity {
             View old = statusCardRef.getChildAt(a11yBtnIndex);
             LinearLayout.LayoutParams blp = (LinearLayout.LayoutParams) old.getLayoutParams();
             statusCardRef.removeViewAt(a11yBtnIndex);
-            statusCardRef.addView(a11yButton(state == 2), a11yBtnIndex, blp);
+            statusCardRef.addView(a11yButton(state), a11yBtnIndex, blp);
         }
     }
 
@@ -1925,6 +2077,67 @@ public class SettingsActivity extends Activity {
     // ═══════════════════════════════════════════════════════════════
     //  BUILDERS DE UI
     // ═══════════════════════════════════════════════════════════════
+
+    private LinearLayout pageIntro(String eyebrow, String title, String description,
+                                   int iconRes, int accent) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.HORIZONTAL);
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        card.setPadding(dp(16), dp(15), dp(14), dp(15));
+        GradientDrawable bg = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                new int[]{Ui.color(this, "hero"), Ui.color(this, "surface")});
+        bg.setCornerRadius(dp(20));
+        bg.setStroke(dp(1), (accent & 0x00FFFFFF) | 0x52000000);
+        card.setBackground(bg);
+        card.setElevation(dp(1));
+
+        LinearLayout copy = new LinearLayout(this);
+        copy.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams copyLp = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        copyLp.rightMargin = dp(10);
+        card.addView(copy, copyLp);
+
+        TextView overline = new TextView(this);
+        overline.setText(eyebrow);
+        overline.setTextSize(8.5f);
+        overline.setLetterSpacing(0.075f);
+        overline.setTextColor(accent);
+        overline.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        overline.setMaxLines(1);
+        overline.setEllipsize(TextUtils.TruncateAt.END);
+        copy.addView(overline);
+
+        TextView heading = new TextView(this);
+        heading.setText(title);
+        heading.setTextSize(20);
+        heading.setTextColor(TEXT_MAIN);
+        heading.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
+        heading.setMaxLines(2);
+        heading.setEllipsize(TextUtils.TruncateAt.END);
+        copy.addView(heading, lpMATCH(4));
+
+        TextView note = new TextView(this);
+        note.setText(description);
+        note.setTextSize(12);
+        note.setTextColor(TEXT_DIM);
+        note.setMaxLines(2);
+        note.setEllipsize(TextUtils.TruncateAt.END);
+        copy.addView(note);
+
+        LinearLayout iconShell = new LinearLayout(this);
+        iconShell.setGravity(Gravity.CENTER);
+        iconShell.setBackground(rounded((accent & 0x00FFFFFF) | 0x21000000,
+                16, (accent & 0x00FFFFFF) | 0x66000000));
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(iconRes);
+        icon.setColorFilter(accent);
+        icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        iconShell.addView(icon, new LinearLayout.LayoutParams(dp(28), dp(28)));
+        card.addView(iconShell, new LinearLayout.LayoutParams(dp(54), dp(54)));
+        return card;
+    }
 
     private LinearLayout createPanel() {
         LinearLayout panel = new LinearLayout(this);
