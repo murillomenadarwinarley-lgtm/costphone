@@ -68,7 +68,6 @@ if ($hadConfig) {
   if ($null -eq $config -or $config -isnot [System.Management.Automation.PSCustomObject]) { Stop-Setup "La raíz de opencode.json no es un objeto JSON. No lo modifiqué." }
 } else {
   $config = [pscustomobject][ordered]@{}
-  $config | Add-Member -MemberType NoteProperty -Name '$schema' -Value "https://opencode.ai/config.json"
 }
 $mcpProperty = $config.PSObject.Properties["mcp"]
 if ($null -eq $mcpProperty -or $null -eq $mcpProperty.Value) {
