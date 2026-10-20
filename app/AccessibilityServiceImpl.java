@@ -26,8 +26,10 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 public class AccessibilityServiceImpl extends AccessibilityService {
 
@@ -83,8 +85,10 @@ public class AccessibilityServiceImpl extends AccessibilityService {
     static AccessibilityServiceImpl sInstance;
     int screenW, screenH;
     BroadcastReceiver receiver;
-    // Mantiene el orden de amctl sin bloquear el hilo principal con I/O, árboles UI o PNG.
-    private final ExecutorService commandExecutor = Executors.newSingleThreadExecutor();
+    // Cola serial acotada: evita acumular órdenes ilimitadas si el servicio se atasca.
+    private final ThreadPoolExecutor commandExecutor = new ThreadPoolExecutor(
+            1, 1, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(32));
+    private static final int MAX_UI_TREE_LINES = 1200;
     // Shared secret – set via build-time constant or default. amctl must send it.
     static final String SECRET = "termux-accessdroid-2025";
     // Screenshot callback state
@@ -153,6 +157,8 @@ public class AccessibilityServiceImpl extends AccessibilityService {
     @Override
     public void onServiceConnected() {
         super.onServiceConnected();
+        CrashReporter.install(this);
+        ConnectionLog.init(this);
         DisplayMetrics dm = getResources().getDisplayMetrics();
         screenW = dm.widthPixels;
         screenH = dm.heightPixels;
@@ -167,13 +173,16 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                         public void run() {
                             try {
                                 handleCommand(command);
-                            } catch (RuntimeException e) {
+                            } catch (Throwable e) {
                                 Log.e(TAG, "Error procesando comando " + command.getAction(), e);
+                                ConnectionLog.add("COMMAND exception action=" + command.getAction()
+                                        + " type=" + e.getClass().getSimpleName());
                             }
                         }
                     });
-                } catch (java.util.concurrent.RejectedExecutionException e) {
-                    Log.w(TAG, "Comando ignorado: el servicio se está cerrando", e);
+                } catch (RejectedExecutionException e) {
+                    ConnectionLog.add("QUEUE busy: comando rechazado " + intent.getAction());
+                    Log.w(TAG, "Comando rechazado: cola llena o servicio cerrándose", e);
                 }
             }
         };
@@ -311,8 +320,10 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                 int x = intent.getIntExtra("x", -1);
                 int y = intent.getIntExtra("y", -1);
                 if (x < 0 || y < 0) return;
-                if (!ShizukuManager.runShell(disp(intent), "input_tap", x, y, 80L))
-                    run(makeTap(x, y, 80L, disp(intent)), "tap");
+                final int display = disp(intent);
+                runShellOrFallback(display, "input_tap", new Runnable() {
+                    @Override public void run() { AccessibilityServiceImpl.this.run(makeTap(x, y, 80L, display), "tap"); }
+                }, x, y, 80L);
                 break;
             }
             case ACTION_LONG_PRESS: {
@@ -320,8 +331,10 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                 int y = intent.getIntExtra("y", -1);
                 long dur = intent.getLongExtra("duration", 500);
                 if (x < 0 || y < 0) return;
-                if (!ShizukuManager.runShell(disp(intent), "input_swipe", x, y, x, y, dur))
-                    run(makeTap(x, y, dur, disp(intent)), "longpress");
+                final int display = disp(intent);
+                runShellOrFallback(display, "input_swipe", new Runnable() {
+                    @Override public void run() { AccessibilityServiceImpl.this.run(makeTap(x, y, dur, display), "longpress"); }
+                }, x, y, x, y, dur);
                 break;
             }
             case ACTION_SWIPE: {
@@ -331,37 +344,43 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                 int y2 = intent.getIntExtra("y2", -1);
                 long dur = intent.getLongExtra("duration", 300);
                 if (x1 < 0 || x2 < 0) return;
-                if (!ShizukuManager.runShell(disp(intent), "input_swipe", x1, y1, x2, y2, dur))
-                    run(makeSwipe(x1, y1, x2, y2, dur, disp(intent)), "swipe");
+                final int display = disp(intent);
+                runShellOrFallback(display, "input_swipe", new Runnable() {
+                    @Override public void run() { AccessibilityServiceImpl.this.run(makeSwipe(x1, y1, x2, y2, dur, display), "swipe"); }
+                }, x1, y1, x2, y2, dur);
                 break;
             }
             case ACTION_SCROLL_UP: {
                 android.util.DisplayMetrics dm = metricsOf(disp(intent));
                 int x = intent.getIntExtra("x", dm.widthPixels / 2);
                 int y = intent.getIntExtra("y", (int)(dm.heightPixels * 0.5f));
-                if (!ShizukuManager.runShell(disp(intent), "input_swipe", x, y, x, (int)(y + (dm.heightPixels * -0.4f)), 200L))
-                    run(makeScroll(x, y, -0.4f, disp(intent)), "scrollUp");
+                final int display = disp(intent);
+                runShellOrFallback(display, "input_swipe", new Runnable() {
+                    @Override public void run() { AccessibilityServiceImpl.this.run(makeScroll(x, y, -0.4f, display), "scrollUp"); }
+                }, x, y, x, (int)(y + (dm.heightPixels * -0.4f)), 200L);
                 break;
             }
             case ACTION_SCROLL_DOWN: {
                 android.util.DisplayMetrics dm = metricsOf(disp(intent));
                 int x = intent.getIntExtra("x", dm.widthPixels / 2);
                 int y = intent.getIntExtra("y", (int)(dm.heightPixels * 0.5f));
-                if (!ShizukuManager.runShell(disp(intent), "input_swipe", x, y, x, (int)(y + (dm.heightPixels * 0.4f)), 200L))
-                    run(makeScroll(x, y, 0.4f, disp(intent)), "scrollDown");
+                final int display = disp(intent);
+                runShellOrFallback(display, "input_swipe", new Runnable() {
+                    @Override public void run() { AccessibilityServiceImpl.this.run(makeScroll(x, y, 0.4f, display), "scrollDown"); }
+                }, x, y, x, (int)(y + (dm.heightPixels * 0.4f)), 200L);
                 break;
             }
             case ACTION_BACK:
-                if (!ShizukuManager.runShell(disp(intent), "input_keyevent", 4))
-                    performGlobalAction(GLOBAL_ACTION_BACK);
+                runShellOrFallback(disp(intent), "input_keyevent",
+                        new Runnable() { @Override public void run() { performGlobalAction(GLOBAL_ACTION_BACK); } }, 4);
                 break;
             case ACTION_HOME:
-                if (!ShizukuManager.runShell(disp(intent), "input_keyevent", 3))
-                    performGlobalAction(GLOBAL_ACTION_HOME);
+                runShellOrFallback(disp(intent), "input_keyevent",
+                        new Runnable() { @Override public void run() { performGlobalAction(GLOBAL_ACTION_HOME); } }, 3);
                 break;
             case ACTION_RECENTS:
-                if (!ShizukuManager.runShell(disp(intent), "input_keyevent", 187))
-                    performGlobalAction(GLOBAL_ACTION_RECENTS);
+                runShellOrFallback(disp(intent), "input_keyevent",
+                        new Runnable() { @Override public void run() { performGlobalAction(GLOBAL_ACTION_RECENTS); } }, 187);
                 break;
             case ACTION_TYPE: {
                 String text = intent.getStringExtra("text");
@@ -370,8 +389,10 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                     args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text);
                     AccessibilityNodeInfo focus = focusIn(disp(intent));
                     if (focus != null) {
-                        focus.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
-                        Log.i(TAG, "typed: " + text);
+                        try {
+                            focus.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+                            Log.i(TAG, "typed text length=" + text.length());
+                        } finally { try { focus.recycle(); } catch (Throwable ignored) { } }
                     } else {
                         Log.w(TAG, "no focused input field");
                     }
@@ -383,11 +404,13 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                 if (txt != null && !txt.isEmpty()) {
                     AccessibilityNodeInfo root = rootFor(disp(intent));
                     if (root != null) {
-                        AccessibilityNodeInfo target = findByText(root, txt);
-                        if (target != null) {
-                            boolean ok = clickNodeOrAncestor(target);
-                            Log.i(TAG, "click '" + txt + "' (incluye contenedor) → " + ok);
-                        }
+                        try {
+                            AccessibilityNodeInfo target = findByText(root, txt);
+                            if (target != null) {
+                                try { Log.i(TAG, "click text outcome=" + clickNodeOrAncestor(target)); }
+                                finally { try { target.recycle(); } catch (Throwable ignored) { } }
+                            } else Log.w(TAG, "click text not found");
+                        } finally { try { root.recycle(); } catch (Throwable ignored) { } }
                     }
                 }
                 break;
@@ -398,13 +421,13 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                 if (rid != null && !rid.isEmpty()) {
                     AccessibilityNodeInfo root = rootFor(disp(intent));
                     if (root != null) {
-                        List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByViewId(rid);
-                        if (!nodes.isEmpty()) {
-                            boolean ok = clickNodeOrAncestor(nodes.get(0));
-                            Log.i(TAG, "click id=" + rid + " (incluye contenedor) → " + ok);
-                        } else {
-                            Log.w(TAG, "find id=" + rid + " → no encontrado");
-                        }
+                        try {
+                            List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByViewId(rid);
+                            if (nodes != null && !nodes.isEmpty()) {
+                                try { Log.i(TAG, "click ID outcome=" + clickNodeOrAncestor(nodes.get(0))); }
+                                finally { for (AccessibilityNodeInfo n : nodes) if (n != null) try { n.recycle(); } catch (Throwable ignored) { } }
+                            } else Log.w(TAG, "resource ID not found");
+                        } finally { try { root.recycle(); } catch (Throwable ignored) { } }
                     }
                 }
                 break;
@@ -414,11 +437,13 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                 if (txt != null && !txt.isEmpty()) {
                     AccessibilityNodeInfo root = rootFor(disp(intent));
                     if (root != null) {
-                        AccessibilityNodeInfo target = findByText(root, txt);
-                        if (target != null) {
-                            boolean ok = target.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
-                            Log.i(TAG, "scrollTo '" + txt + "' → " + ok);
-                        }
+                        try {
+                            AccessibilityNodeInfo target = findByText(root, txt);
+                            if (target != null) {
+                                try { Log.i(TAG, "scroll-to outcome=" + target.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)); }
+                                finally { try { target.recycle(); } catch (Throwable ignored) { } }
+                            }
+                        } finally { try { root.recycle(); } catch (Throwable ignored) { } }
                     }
                 }
                 break;
@@ -458,7 +483,10 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                     lines.add("# d" + d + ": " + (d == android.view.Display.DEFAULT_DISPLAY
                         ? "sin ventana activa" : "sin ventanas propias (vacío)"));
                 }
-                if (lines.size() > 3500) lines = lines.subList(0, 3500);
+                if (lines.size() > MAX_UI_TREE_LINES) {
+                    lines = new ArrayList<>(lines.subList(0, MAX_UI_TREE_LINES));
+                    lines.add("# truncated: límite de " + MAX_UI_TREE_LINES + " líneas");
+                }
                 try { saveToDownloads("accessdroid-tree.txt", "text/plain", joinLines(lines).getBytes("UTF-8")); }
                 catch (Exception e) { Log.w(TAG, "tree encode fail", e); }
                 break;
@@ -572,15 +600,20 @@ public class AccessibilityServiceImpl extends AccessibilityService {
             case ACTION_CLEAR_TEXT: {
                 AccessibilityNodeInfo f = focusIn(disp(intent));
                 if (f != null) {
-                    Bundle b = new Bundle();
-                    b.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "");
-                    f.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, b);
+                    try {
+                        Bundle b = new Bundle();
+                        b.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "");
+                        f.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, b);
+                    } finally { try { f.recycle(); } catch (Throwable ignored) { } }
                 }
                 break;
             }
             case ACTION_PASTE: {
                 AccessibilityNodeInfo f2 = focusIn(disp(intent));
-                if (f2 != null) f2.performAction(AccessibilityNodeInfo.ACTION_PASTE);
+                if (f2 != null) {
+                    try { f2.performAction(AccessibilityNodeInfo.ACTION_PASTE); }
+                    finally { try { f2.recycle(); } catch (Throwable ignored) { } }
+                }
                 break;
             }
             case ACTION_FOCUS: {
@@ -588,13 +621,21 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                 String rid = intent.getStringExtra("id");
                 AccessibilityNodeInfo root = rootFor(disp(intent));
                 if (root == null) break;
-                AccessibilityNodeInfo target = null;
-                if (txt != null && !txt.isEmpty()) target = findByText(root, txt);
-                else if (rid != null && !rid.isEmpty()) {
-                    List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByViewId(rid);
-                    if (!nodes.isEmpty()) target = nodes.get(0);
-                }
-                if (target != null) target.performAction(AccessibilityNodeInfo.ACTION_FOCUS);
+                try {
+                    AccessibilityNodeInfo target = null;
+                    if (txt != null && !txt.isEmpty()) target = findByText(root, txt);
+                    else if (rid != null && !rid.isEmpty()) {
+                        List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByViewId(rid);
+                        if (nodes != null) {
+                            try { if (!nodes.isEmpty()) target = AccessibilityNodeInfo.obtain(nodes.get(0)); }
+                            finally { for (AccessibilityNodeInfo n : nodes) if (n != null) try { n.recycle(); } catch (Throwable ignored) { } }
+                        }
+                    }
+                    if (target != null) {
+                        try { target.performAction(AccessibilityNodeInfo.ACTION_FOCUS); }
+                        finally { try { target.recycle(); } catch (Throwable ignored) { } }
+                    }
+                } finally { try { root.recycle(); } catch (Throwable ignored) { } }
                 break;
             }
             case ACTION_NOTIFICATIONS:
@@ -717,30 +758,32 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                 // GLOBAL_ACTION_BACK siempre es del display 0: buscamos el botón
                 // de retroceso de la app en la pantalla virtual.
                 AccessibilityNodeInfo root = rootFor(dispId);
-                AccessibilityNodeInfo btn = findBackNode(root, 0);
-                if (btn != null) {
-                    boolean ok = btn.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-                    Log.i(TAG, "back en display " + dispId + " → " + ok);
-                } else {
+                try {
+                    AccessibilityNodeInfo btn = findBackNode(root, 0);
+                    if (btn != null) {
+                        try { Log.i(TAG, "back en display " + dispId + " → " + btn.performAction(AccessibilityNodeInfo.ACTION_CLICK)); }
+                        finally { try { btn.recycle(); } catch (Throwable ignored) { } }
+                    } else {
                     Log.w(TAG, "sin botón atrás en display " + dispId);
                     try { saveToDownloads("accessdroid-error.txt", "text/plain",
                         ("display=" + dispId + ": la app no tiene botón de retroceso reconocible en ese display").getBytes("UTF-8")); }
                     catch (Exception ignored) { }
-                }
+                    }
+                } finally { if (root != null) try { root.recycle(); } catch (Throwable ignored) { } }
                 break;
             }
             case ACTION_EXPORT_LOG: {
                 StringBuilder report = new StringBuilder();
-                report.append("CostPhone diagnostic log\\n");
-                report.append("SDK=").append(Build.VERSION.SDK_INT).append("\\n");
-                report.append("Time=").append(System.currentTimeMillis()).append("\\n");
-                for (String line : ConnectionLog.dumpAll()) report.append(line).append("\\n");
+                report.append("CostPhone diagnostic log\n");
+                report.append("SDK=").append(Build.VERSION.SDK_INT).append("\n");
+                report.append("Time=").append(System.currentTimeMillis()).append("\n");
+                String crash = CrashReporter.readLastCrash(this);
+                if (crash != null && !crash.isEmpty()) report.append("\n--- LAST FATAL CRASH ---\n").append(crash).append("\n");
+                for (String line : ConnectionLog.dumpAll()) report.append(line).append("\n");
                 try {
                     saveToDownloads("accessdroid-connection.log", "text/plain",
                             report.toString().getBytes("UTF-8"));
-                } catch (Exception e) {
-                    Log.w(TAG, "No se pudo exportar el registro", e);
-                }
+                } catch (Exception e) { Log.w(TAG, "No se pudo exportar el registro", e); }
                 break;
             }
         }
@@ -751,6 +794,10 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                 ConnectionLog.add("PERF command=" + safeAction + " duration_ms=" + elapsed);
             }
         }
+    }
+
+    private void runShellOrFallback(int displayId, String action, Runnable fallback, Object... args) {
+        if (!ShizukuManager.runShellAsync(displayId, action, fallback, args)) fallback.run();
     }
 
     /* -------------------------------------------------------------- */
@@ -776,11 +823,9 @@ public class AccessibilityServiceImpl extends AccessibilityService {
     }
 
     /** Árbol raíz de un display cualquiera (0 = el de siempre). */
+    /** Nodo raíz del display; el nodo devuelto pertenece al llamador. */
     private AccessibilityNodeInfo rootFor(int displayId) {
         if (displayId == android.view.Display.DEFAULT_DISPLAY) {
-            // Con una pantalla virtual encima, getRootInActiveWindow() devuelve la
-            // ventana del overlay (está encima de la real). Para el display 0
-            // devolvemos la ventana que REALMENTE es de esta pantalla.
             if (Build.VERSION.SDK_INT >= 30) {
                 AccessibilityNodeInfo own = topmostAppRoot(displayId);
                 if (own != null) return own;
@@ -788,101 +833,112 @@ public class AccessibilityServiceImpl extends AccessibilityService {
             return getRootInActiveWindow();
         }
         if (Build.VERSION.SDK_INT < 30) return null;
-        // CANDADO DE AISLAMIENTO: si ese display no tiene ventanas propias, la
-        // respuesta honesta es "vacío". getRootInActiveWindow(displayId) NO sirve
-        // de atajo: con un display virtual vacío el framework devuelve la
-        // ventana activa GLOBAL (la de la pantalla 0), que es justo la fuga que
-        // este display debe impedir.
         List<AccessibilityWindowInfo> wins = windowsOf(displayId);
-        if (wins == null || wins.isEmpty()) return null;
-        // primero las ventanas que SÍ pertenecen a este display: si no hay
-        // ninguna, getRootInActiveWindow() puede devolver una de la pantalla 0.
+        boolean hasOwnWindows = wins != null && !wins.isEmpty();
+        recycleWindows(wins);
+        if (!hasOwnWindows) return null;
         AccessibilityNodeInfo own = topmostAppRoot(displayId);
         if (own != null) return own;
-        try {
-            return getRootInActiveWindow(displayId);
-        } catch (IllegalArgumentException e) {
-            // "There can be no more than one descendant prefetching strategy":
-            // el framework no admite dos prefetches de accesibilidad a la vez y
-            // el conflicto es transitorio. Un reintento lo resuelve casi siempre.
-            // No dormir en el hilo principal de accesibilidad; el agente puede reintentar.
-            Log.w(TAG, "prefetch de accesibilidad ocupado en d" + displayId + "; se omite el intento");
+        try { return getRootInActiveWindow(displayId); }
+        catch (IllegalArgumentException e) {
+            Log.w(TAG, "prefetch de accesibilidad ocupado en d" + displayId + "; se omite");
             return null;
-        } catch (Exception e) { Log.w(TAG, "getRootInActiveWindow(" + displayId + ")", e); return null; }
+        } catch (Exception e) {
+            Log.w(TAG, "getRootInActiveWindow(" + displayId + ")", e);
+            return null;
+        }
     }
 
-    /** ¿Existe ese display ahora mismo? (para no mentir en los informes) */
     private boolean displayExists(int displayId) {
         try {
             android.hardware.display.DisplayManager dm =
-                (android.hardware.display.DisplayManager) getSystemService(Context.DISPLAY_SERVICE);
+                    (android.hardware.display.DisplayManager) getSystemService(Context.DISPLAY_SERVICE);
             return dm != null && dm.getDisplay(displayId) != null;
         } catch (Exception e) { return false; }
     }
 
-    /** Ventana de aplicación más alta que pertenece realmente a ese display. */
     private AccessibilityNodeInfo topmostAppRoot(int displayId) {
         List<AccessibilityWindowInfo> wins = windowsOf(displayId);
         if (wins == null) return null;
-        for (int i = wins.size() - 1; i >= 0; i--) {
-            AccessibilityWindowInfo aw = wins.get(i);
-            if (aw == null) continue;
-            if (aw.getDisplayId() != displayId) continue;
-            if (aw.getType() != AccessibilityWindowInfo.TYPE_APPLICATION) continue;
-            try {
-                AccessibilityNodeInfo r = aw.getRoot();
-                if (r != null) return r;
-            } catch (Exception e) { Log.w(TAG, "topmostAppRoot d" + displayId, e); }
-        }
-        return null;
+        AccessibilityNodeInfo result = null;
+        try {
+            for (int i = wins.size() - 1; i >= 0; i--) {
+                AccessibilityWindowInfo aw = wins.get(i);
+                if (aw == null || aw.getDisplayId() != displayId
+                        || aw.getType() != AccessibilityWindowInfo.TYPE_APPLICATION) continue;
+                try {
+                    result = aw.getRoot();
+                    if (result != null) break;
+                } catch (Exception e) { Log.w(TAG, "topmostAppRoot d" + displayId, e); }
+            }
+        } finally { recycleWindows(wins); }
+        return result;
     }
 
-    /** Ventanas de accesibilidad de un display (API 30+). */
+    private void recycleWindows(List<AccessibilityWindowInfo> wins) {
+        if (wins == null) return;
+        for (AccessibilityWindowInfo w : wins) {
+            if (w != null) try { w.recycle(); } catch (Throwable ignored) { }
+        }
+    }
+
     private List<AccessibilityWindowInfo> windowsOf(int displayId) {
         if (Build.VERSION.SDK_INT < 30) return null;
         try {
             android.util.SparseArray<List<AccessibilityWindowInfo>> all = getWindowsOnAllDisplays();
-            return all == null ? null : all.get(displayId);
-        } catch (Exception e) { Log.w(TAG, "getWindowsOnAllDisplays", e); return null; }
+            if (all == null) return null;
+            List<AccessibilityWindowInfo> selected = all.get(displayId);
+            for (int i = 0; i < all.size(); i++) {
+                List<AccessibilityWindowInfo> list = all.valueAt(i);
+                if (list != null && list != selected) recycleWindows(list);
+            }
+            return selected;
+        } catch (Exception e) {
+            Log.w(TAG, "getWindowsOnAllDisplays", e);
+            return null;
+        }
     }
 
-    /** Campo de texto con foco, buscando en el display indicado. */
     private AccessibilityNodeInfo focusIn(int displayId) {
         if (Build.VERSION.SDK_INT >= 30) {
-            // solo entre las ventanas que pertenecen de verdad a este display:
-            // si no, escribiría en el campo de la pantalla virtual.
             List<AccessibilityWindowInfo> wins = windowsOf(displayId);
-            for (int i = wins != null ? wins.size() - 1 : -1; i >= 0; i--) {
-                AccessibilityWindowInfo aw = wins.get(i);
-                if (aw == null || aw.getDisplayId() != displayId) continue;
-                try {
-                    AccessibilityNodeInfo r = aw.getRoot();
-                    if (r == null) continue;
-                    AccessibilityNodeInfo f = findEditableFocus(r, 0);
-                    if (f != null) return f;
-                } catch (Exception e) { Log.w(TAG, "focusIn d" + displayId, e); }
-            }
+            AccessibilityNodeInfo found = null;
+            try {
+                for (int i = wins != null ? wins.size() - 1 : -1; i >= 0; i--) {
+                    AccessibilityWindowInfo aw = wins.get(i);
+                    if (aw == null || aw.getDisplayId() != displayId) continue;
+                    AccessibilityNodeInfo root = null;
+                    try {
+                        root = aw.getRoot();
+                        if (root != null) found = findEditableFocus(root, 0);
+                    } catch (Exception e) { Log.w(TAG, "focusIn d" + displayId, e); }
+                    finally { if (root != null) try { root.recycle(); } catch (Throwable ignored) { } }
+                    if (found != null) break;
+                }
+            } finally { recycleWindows(wins); }
+            if (found != null) return found;
         }
-        if (displayId == android.view.Display.DEFAULT_DISPLAY) {
-            return findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
-        }
-        return findEditableFocus(rootFor(displayId), 0);
+        if (displayId == android.view.Display.DEFAULT_DISPLAY) return findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        AccessibilityNodeInfo root = rootFor(displayId);
+        if (root == null) return null;
+        try { return findEditableFocus(root, 0); }
+        finally { try { root.recycle(); } catch (Throwable ignored) { } }
     }
 
     private AccessibilityNodeInfo findEditableFocus(AccessibilityNodeInfo node, int depth) {
         if (node == null || depth > 15) return null;
-        if (node.isFocused() && node.isEditable()) return node;
+        if (node.isFocused() && node.isEditable()) return AccessibilityNodeInfo.obtain(node);
         for (int i = 0; i < node.getChildCount(); i++) {
             AccessibilityNodeInfo child = node.getChild(i);
             if (child == null) continue;
-            AccessibilityNodeInfo found = findEditableFocus(child, depth + 1);
+            AccessibilityNodeInfo found = null;
+            try { found = findEditableFocus(child, depth + 1); }
+            finally { try { child.recycle(); } catch (Throwable ignored) { } }
             if (found != null) return found;
-            child.recycle();
         }
         return null;
     }
 
-    /** Botón "atrás" de una app en el display indicado (el global BACK es del display 0). */
     private AccessibilityNodeInfo findBackNode(AccessibilityNodeInfo node, int depth) {
         if (node == null || depth > 10) return null;
         if (node.isClickable() || node.isVisibleToUser()) {
@@ -890,24 +946,20 @@ public class AccessibilityServiceImpl extends AccessibilityService {
             CharSequence cd = node.getContentDescription();
             String hay = ((cs == null ? "" : cs) + " " + (cd == null ? "" : cd)).toLowerCase();
             if (hay.contains("back") || hay.contains("atrás") || hay.contains("atras")
-                    || hay.contains("regresar") || hay.contains("navigate up")
-                    || hay.contains("volver")) {
-                if (node.isClickable()) return node;
+                    || hay.contains("regresar") || hay.contains("navigate up") || hay.contains("volver")) {
+                if (node.isClickable()) return AccessibilityNodeInfo.obtain(node);
             }
         }
         for (int i = 0; i < node.getChildCount(); i++) {
             AccessibilityNodeInfo child = node.getChild(i);
             if (child == null) continue;
-            AccessibilityNodeInfo found = findBackNode(child, depth + 1);
+            AccessibilityNodeInfo found = null;
+            try { found = findBackNode(child, depth + 1); }
+            finally { try { child.recycle(); } catch (Throwable ignored) { } }
             if (found != null) return found;
-            child.recycle();
         }
         return null;
     }
-
-    /* -------------------------------------------------------------- */
-    /*                    Pantalla virtual (overlay)                    */
-    /* -------------------------------------------------------------- */
 
     private boolean canWriteSettings() {
         return getPackageManager().checkPermission("android.permission.WRITE_SECURE_SETTINGS",
@@ -1131,36 +1183,38 @@ public class AccessibilityServiceImpl extends AccessibilityService {
     private void dumpAllWindows(List<String> out, int displayId) {
         AccessibilityNodeInfo root = rootFor(displayId);
         if (root == null) return;
-        out.add("# display=" + displayId);
-        out.add("# pkg=" + root.getPackageName());
-        dumpNode(root, out, 0, 25);
-        Log.d(TAG, "root window: " + root.getPackageName() + " (display " + displayId + ")");
+        final Rect mainRect = new Rect();
+        final String mainPkg;
+        try {
+            root.getBoundsInScreen(mainRect);
+            mainPkg = String.valueOf(root.getPackageName());
+            out.add("# display=" + displayId);
+            out.add("# pkg=" + mainPkg);
+            dumpNode(root, out, 0, 25);
+        } finally { try { root.recycle(); } catch (Throwable ignored) { } }
 
         List<AccessibilityWindowInfo> wins = windowsOf(displayId);
         if (wins == null) return;
-
-        Rect mainRect = new Rect();
-        root.getBoundsInScreen(mainRect);
-        String mainPkg = String.valueOf(root.getPackageName());
-        for (int i = 0; i < wins.size(); i++) {
-            AccessibilityWindowInfo aw = wins.get(i);
-            if (aw == null) continue;
-            if (aw.getDisplayId() != displayId) continue;   // ventanas de otra pantalla
-            AccessibilityNodeInfo wroot = null;
-            try { wroot = aw.getRoot(); } catch (Exception e) { continue; }
-            if (wroot == null) continue;
-            // skip: root window itself (same pkg + same screen bounds)
-            Rect wr = new Rect();
-            wroot.getBoundsInScreen(wr);
-            String wpkg = String.valueOf(wroot.getPackageName());
-            if (wr.equals(mainRect) && wpkg.equals(mainPkg)) continue;
-            String kind = windowTag(aw.getType());
-            if (kind == null) continue;   // TYPE_APPLICATION duplicada: omitir
-            out.add("# win=" + kind + " pkg=" + wpkg);
-            int before = out.size();
-            dumpNode(wroot, out, 0, 25);
-            Log.d(TAG, "extra window " + kind + " nodes=" + (out.size() - before));
-        }
+        try {
+            for (int i = 0; i < wins.size() && out.size() < MAX_UI_TREE_LINES; i++) {
+                AccessibilityWindowInfo aw = wins.get(i);
+                if (aw == null || aw.getDisplayId() != displayId) continue;
+                AccessibilityNodeInfo wroot = null;
+                try { wroot = aw.getRoot(); } catch (Exception ignored) { }
+                if (wroot == null) continue;
+                try {
+                    Rect wr = new Rect();
+                    wroot.getBoundsInScreen(wr);
+                    String wpkg = String.valueOf(wroot.getPackageName());
+                    if (wr.equals(mainRect) && wpkg.equals(mainPkg)) continue;
+                    String kind = windowTag(aw.getType());
+                    if (kind == null) continue;
+                    out.add("# win=" + kind + " pkg=" + wpkg);
+                    dumpNode(wroot, out, 0, 25);
+                } finally { try { wroot.recycle(); } catch (Throwable ignored) { } }
+            }
+        } finally { recycleWindows(wins); }
+        if (out.size() >= MAX_UI_TREE_LINES) out.add("# truncated: límite de " + MAX_UI_TREE_LINES + " líneas");
     }
 
     private String windowTag(int type) {
@@ -1208,23 +1262,21 @@ public class AccessibilityServiceImpl extends AccessibilityService {
         if (node == null) return null;
         CharSequence cs = node.getText();
         CharSequence desc = node.getContentDescription();
-        if ((cs != null && cs.toString().contains(text)) ||
-            (desc != null && desc.toString().contains(text))) {
-            return node;
-        }
+        if ((cs != null && cs.toString().contains(text))
+                || (desc != null && desc.toString().contains(text))) return AccessibilityNodeInfo.obtain(node);
         for (int i = 0; i < node.getChildCount(); i++) {
             AccessibilityNodeInfo child = node.getChild(i);
-            if (child != null) {
-                AccessibilityNodeInfo found = findByText(child, text);
-                if (found != null) return found;
-                child.recycle();
-            }
+            if (child == null) continue;
+            AccessibilityNodeInfo found = null;
+            try { found = findByText(child, text); }
+            finally { try { child.recycle(); } catch (Throwable ignored) { } }
+            if (found != null) return found;
         }
         return null;
     }
 
     private void dumpNode(AccessibilityNodeInfo node, List<String> out, int depth, int maxDepth) {
-        if (depth > maxDepth || node == null) return;
+        if (depth > maxDepth || node == null || out.size() >= MAX_UI_TREE_LINES) return;
         Rect r = new Rect();
         node.getBoundsInScreen(r);
         CharSequence txt = node.getText();
@@ -1249,8 +1301,11 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                 indent, shortClass, vid, r,
                 txt == null ? "" : txt, desc == null ? "" : desc, flags));
         }
-        for (int i = 0; i < cc; i++) {
-            dumpNode(node.getChild(i), out, depth + 1, maxDepth);
+        for (int i = 0; i < cc && out.size() < MAX_UI_TREE_LINES; i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            if (child == null) continue;
+            try { dumpNode(child, out, depth + 1, maxDepth); }
+            finally { try { child.recycle(); } catch (Throwable ignored) { } }
         }
     }
 }

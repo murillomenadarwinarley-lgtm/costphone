@@ -79,6 +79,7 @@ public class SettingsActivity extends Activity {
     private View tabInicio, tabControl, tabInspector, tabRutinas, tabAjustes;
     private LinearLayout panelInicio, panelControl, panelInspector, panelRutinas, panelAjustes;
     private LinearLayout contentArea;
+    private int lastServiceState = -1;
 
     private Handler handler = new Handler(Looper.getMainLooper());
     private int statusRefreshRetries = 0;
@@ -115,6 +116,8 @@ public class SettingsActivity extends Activity {
 
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
+        CrashReporter.install(this);
+        ConnectionLog.init(this);
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         ShizukuManager.get();
 
@@ -1993,6 +1996,8 @@ public class SettingsActivity extends Activity {
 
     private void refreshStatus() {
         int state = serviceState();
+        boolean stateChanged = lastServiceState != state;
+        lastServiceState = state;
         int color;
         String text;
         String desc;
@@ -2029,7 +2034,7 @@ public class SettingsActivity extends Activity {
                     ? R.drawable.ic_connected : R.drawable.ic_disconnected);
             heroStatusIcon.setColorFilter(color);
         }
-        if (statusCardRef != null && a11yBtnIndex >= 0
+        if (stateChanged && statusCardRef != null && a11yBtnIndex >= 0
                 && a11yBtnIndex < statusCardRef.getChildCount()) {
             View old = statusCardRef.getChildAt(a11yBtnIndex);
             LinearLayout.LayoutParams blp = (LinearLayout.LayoutParams) old.getLayoutParams();

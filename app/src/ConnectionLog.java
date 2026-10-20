@@ -26,7 +26,7 @@ import java.util.concurrent.Executors;
 public final class ConnectionLog {
 
     /** Líneas que se muestran en el panel. */
-    private static final int PANEL_LINES = 60;
+    private static final int PANEL_LINES = 24;
     /** Tope del fichero: al llegar, se descarta la mitad más vieja. */
     private static final int FILE_LINES = 400;
 

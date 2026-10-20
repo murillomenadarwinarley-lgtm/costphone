@@ -13,8 +13,11 @@ import com.accessdroid.termux.shell.ICostPhoneShell;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import rikka.shizuku.Shizuku;
 
@@ -55,8 +58,8 @@ public final class ShizukuManager {
     private static final int MAX_EXEC_ATTEMPTS = 3;
     /** Pausa entre intentos. */
     private static final long EXEC_RETRY_DELAY_MS = 200L;
-    /** Si un comando de shell no vuelve en esto, se avisa (no se mata). */
-    private static final long EXEC_TIMEOUT_MS = 1800L;
+    /** Umbral para detectar IPC de input atascado sin bloquear el dispatcher. */
+    private static final long ASYNC_COMMAND_TIMEOUT_MS = 1200L;
 
     private static ShizukuManager sInstance;
 
@@ -68,8 +71,9 @@ public final class ShizukuManager {
     private final Shizuku.UserServiceArgs args =
             new Shizuku.UserServiceArgs(SHELL_SERVICE).daemon(false);
 
-    // Un solo hilo: amctl manda ráfagas de comandos y deben ejecutarse en orden.
-    private final ExecutorService worker = Executors.newSingleThreadExecutor();
+    // Cola serial acotada: no acumular órdenes ilimitadas cuando un Binder se atasca.
+    private final ThreadPoolExecutor worker = new ThreadPoolExecutor(
+            1, 1, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(16));
     private final Handler handler = new Handler(Looper.getMainLooper());
 
     private volatile ICostPhoneShell shell;
@@ -231,150 +235,139 @@ public final class ShizukuManager {
      * @return true si Shizuku ejecutó la operación; false si no hay que esperar
      *         nada y el llamador debe usar accesibilidad.
      */
-    public static boolean runShell(int displayId, String action, Object... args) {
-        // Las operaciones de input no saben dirigir un display secundario: en la pantalla virtual
-        // (-d N) seguimos con los gestos de accesibilidad, que sí llevan displayId.
+    /**
+     * Encola las acciones de entrada y retorna al dispatcher sin esperar la respuesta Binder.
+     * Si el backend/cola no está disponible, el caller usa Accesibilidad directamente.
+     * Si un IPC expira tras empezar, no se repite el gesto porque podría ejecutarse dos veces.
+     */
+    public static boolean runShellAsync(int displayId, String action, Runnable fallback, Object... args) {
         if (displayId != Display.DEFAULT_DISPLAY) return false;
-        ShizukuManager m = peek();
-        if (m == null) return false;
-        return m.execTyped(action, args);
+        ShizukuManager manager = peek();
+        if (manager == null) return false;
+        return manager.execTypedAsync(action, args, fallback);
     }
 
-    private boolean execTyped(final String action, final Object[] args) {
-        final ICostPhoneShell s = shell;
-        if (s == null) {
+    private boolean execTypedAsync(final String action, final Object[] args, final Runnable fallback) {
+        final ICostPhoneShell target = shell;
+        if (target == null) {
             ensureBound();
-            ConnectionLog.add("Shizuku: no hay binder, usando accesibilidad");
-            return false;   // aún no hay binder: accesibilidad, sin esperar
+            return false;
         }
-        final String[] result = { null };
-        final boolean[] finished = { false };
-        final Object gate = new Object();
-        try {
-            worker.execute(new Runnable() {
-                @Override public void run() {
-                    int attempt = 0;
-                    try {
-                        while (attempt < MAX_EXEC_ATTEMPTS) {
-                            try {
-                                String resultStr = null;
-                                switch (action) {
-                                    case "input_tap":
-                                        if (args == null || args.length < 3) throw new IllegalArgumentException("input_tap requires 3 args");
-                                        // Validar coordenadas no negativas y duración razonable
-                                        int x = (int) args[0];
-                                        int y = (int) args[1];
-                                        long tapDuration = (long) args[2];
-                                        if (x < 0 || y < 0 || tapDuration < 0 || tapDuration > 8000) {
-                                            throw new IllegalArgumentException("input_tap: invalid coords or duration");
-                                        }
-                                        resultStr = s.inputTap((int) args[0], (int) args[1], (long) args[2]);
-                                        break;
-                                    case "input_swipe":
-                                        if (args == null || args.length < 5) throw new IllegalArgumentException("input_swipe requires 5 args");
-                                        int x1 = (int) args[0];
-                                        int y1 = (int) args[1];
-                                        int x2 = (int) args[2];
-                                        int y2 = (int) args[3];
-                                        long swipeDuration = (long) args[4];
-                                        if (x1 < 0 || y1 < 0 || x2 < 0 || y2 < 0 || swipeDuration < 0 || swipeDuration > 8000) {
-                                            throw new IllegalArgumentException("input_swipe: invalid coords or duration");
-                                        }
-                                        resultStr = s.inputSwipe((int) args[0], (int) args[1], (int) args[2], (int) args[3], (long) args[4]);
-                                        break;
-                                    case "input_keyevent":
-                                        if (args == null || args.length < 1) throw new IllegalArgumentException("input_keyevent requires 1 arg");
-                                        resultStr = s.inputKeyevent((int) args[0]);
-                                        break;
-                                    case "screencap":
-                                        if (args == null || args.length < 1) throw new IllegalArgumentException("screencap requires 1 arg");
-                                        resultStr = s.screencap((String) args[0]);
-                                        break;
-                                    case "am_start":
-                                        if (args == null || args.length < 3) throw new IllegalArgumentException("am_start requires 3 args");
-                                        resultStr = s.amStart((String) args[0], (String) args[1], (String) args[2]);
-                                        break;
-                                    case "global_back":
-                                        resultStr = s.globalActionBack();
-                                        break;
-                                    case "global_home":
-                                        resultStr = s.globalActionHome();
-                                        break;
-                                    case "global_recents":
-                                        resultStr = s.globalActionRecents();
-                                        break;
-                                    case "global_lock":
-                                        resultStr = s.globalActionLockScreen();
-                                        break;
-                                    case "global_screenshot":
-                                        resultStr = s.globalActionScreenshot();
-                                        break;
-                                    case "global_power":
-                                        resultStr = s.globalActionPowerDialog();
-                                        break;
-                                    default:
-                                        resultStr = "error: acción desconocida";
-                                        Log.w(TAG, "Shizuku: acción desconocida: " + action);
-                                        break;
-                                }
-                                result[0] = resultStr;
-                                return;
-                            } catch (Throwable t) {
-                                attempt++;
-                                // El UserService puede haber muerto entre medias.
-                                // Reintentamos enlazar una vez más y probamos de
-                                // nuevo; si no se puede, caemos a accesibilidad.
-                                if (attempt >= MAX_EXEC_ATTEMPTS) {
-                                    shell = null;
-                                    ConnectionLog.add("Shizuku: exec('" + action + "') falló tras " + attempt + " intentos");
-                                    Log.w(TAG, "exec('" + action + "') falló: " + t);
-                                    return;
-                                }
-                                synchronized (gate) { gate.wait(EXEC_RETRY_DELAY_MS); }
-                            }
-                        }
-                    } catch (InterruptedException ignored) {
-                        ConnectionLog.add("Shizuku: exec interrumpido");
-                    } finally {
-                        synchronized (gate) {
-                            finished[0] = true;
-                            gate.notifyAll();
+        final AtomicBoolean settled = new AtomicBoolean(false);
+        final AtomicBoolean started = new AtomicBoolean(false);
+        final long queuedAt = android.os.SystemClock.elapsedRealtime();
+        final Runnable[] taskRef = new Runnable[1];
+        final Runnable watchdog = new Runnable() {
+            @Override public void run() {
+                if (!settled.compareAndSet(false, true)) return;
+                boolean removed = !started.get() && worker.remove(taskRef[0]);
+                if (removed) {
+                    ConnectionLog.add("PERF Shizuku action=" + action
+                            + " queue_wait_ms=" + (android.os.SystemClock.elapsedRealtime() - queuedAt)
+                            + " outcome=not_started");
+                    if (fallback != null) fallback.run();
+                    return;
+                }
+                if (shell == target) shell = null;
+                binding = true;
+                bindStartedAt = android.os.SystemClock.elapsedRealtime();
+                ConnectionLog.add("PERF Shizuku action=" + action
+                        + " timeout_ms=" + ASYNC_COMMAND_TIMEOUT_MS
+                        + " outcome=unknown_no_duplicate_fallback");
+                notifyStateChanged(state());
+                handler.postDelayed(new Runnable() {
+                    @Override public void run() {
+                        if (shell == null) {
+                            binding = false;
+                            ensureBound();
                         }
                     }
+                }, BIND_RETRY_MS);
+            }
+        };
+        taskRef[0] = new Runnable() {
+            @Override public void run() {
+                started.set(true);
+                long startedAt = android.os.SystemClock.elapsedRealtime();
+                String value = null;
+                Throwable failure = null;
+                try { value = executeInputAction(target, action, args); }
+                catch (Throwable t) { failure = t; }
+                long elapsed = android.os.SystemClock.elapsedRealtime() - startedAt;
+                if (!settled.compareAndSet(false, true)) {
+                    ConnectionLog.add("PERF Shizuku action=" + action
+                            + " duration_ms=" + elapsed + " outcome=late_reply_ignored");
+                    return;
                 }
-            });
-            // Espera condicional: si el worker acabó antes de wait(), no se pierde
-            // el notify. El tope corto evita congelar el hilo de accesibilidad.
-            long deadline = android.os.SystemClock.elapsedRealtime() + EXEC_TIMEOUT_MS;
-            synchronized (gate) {
-                while (!finished[0]) {
-                    long remaining = deadline - android.os.SystemClock.elapsedRealtime();
-                    if (remaining <= 0L) break;
-                    gate.wait(remaining);
+                handler.removeCallbacks(watchdog);
+                if (failure == null && value != null && !value.trim().startsWith("error:")) {
+                    if (elapsed >= 60L) ConnectionLog.add("PERF Shizuku action=" + action
+                            + " duration_ms=" + elapsed + " outcome=ok");
+                    return;
                 }
+                if (failure == null && value != null && value.trim().startsWith("error:")) {
+                    ConnectionLog.add("Shizuku: error explícito en '" + action + "'; fallback de accesibilidad");
+                    if (fallback != null) fallback.run();
+                    return;
+                }
+                if (shell == target) shell = null;
+                binding = true;
+                bindStartedAt = android.os.SystemClock.elapsedRealtime();
+                ConnectionLog.add("PERF Shizuku action=" + action
+                        + " duration_ms=" + elapsed + " outcome=ipc_exception_no_duplicate");
+                Log.w(TAG, "IPC Shizuku ambiguo para " + action, failure);
+                notifyStateChanged(state());
+                handler.postDelayed(new Runnable() {
+                    @Override public void run() {
+                        if (shell == null) {
+                            binding = false;
+                            ensureBound();
+                        }
+                    }
+                }, BIND_RETRY_MS);
             }
-            if (!finished[0]) {
-                shell = null;
-                ConnectionLog.add("PERF Shizuku action=" + action + " timeout_ms="
-                        + EXEC_TIMEOUT_MS + " outcome=unknown_no_duplicate_fallback");
-                // La llamada Binder podría seguir activa; no repetimos un toque por
-                // accesibilidad, que podría ejecutar la acción dos veces.
-                return true;
-            }
-            if (result[0] == null) {
-                ConnectionLog.add("Shizuku: ejecución sin resultado para '" + action + "', usando accesibilidad");
-                return false;
-            }
-            String value = result[0];
-            if (value == null || value.trim().startsWith("error:")) {
-                ConnectionLog.add("Shizuku: el comando '" + action + "' falló; se usará accesibilidad");
-                return false;
-            }
+        };
+        handler.postDelayed(watchdog, ASYNC_COMMAND_TIMEOUT_MS);
+        try {
+            worker.execute(taskRef[0]);
             return true;
-        } catch (Throwable t) {
-            ConnectionLog.add("Shizuku: no se pudo encolar '" + action + "'");
-            Log.w(TAG, "no se pudo encolar '" + action + "': " + t);
+        } catch (RejectedExecutionException e) {
+            settled.set(true);
+            handler.removeCallbacks(watchdog);
+            ConnectionLog.add("Shizuku: cola llena; fallback de accesibilidad");
             return false;
+        } catch (Throwable t) {
+            settled.set(true);
+            handler.removeCallbacks(watchdog);
+            ConnectionLog.add("Shizuku: no se pudo encolar '" + action + "': " + t.getClass().getSimpleName());
+            return false;
+        }
+    }
+
+    private String executeInputAction(ICostPhoneShell target, String action, Object[] args)
+            throws Exception {
+        switch (action) {
+            case "input_tap": {
+                if (args == null || args.length < 3) return "error: input_tap requires 3 args";
+                int x = (int) args[0], y = (int) args[1];
+                long duration = (long) args[2];
+                if (x < 0 || y < 0 || duration < 0 || duration > 8000)
+                    return "error: input_tap arguments out of range";
+                return target.inputTap(x, y, duration);
+            }
+            case "input_swipe": {
+                if (args == null || args.length < 5) return "error: input_swipe requires 5 args";
+                int x1 = (int) args[0], y1 = (int) args[1];
+                int x2 = (int) args[2], y2 = (int) args[3];
+                long duration = (long) args[4];
+                if (x1 < 0 || y1 < 0 || x2 < 0 || y2 < 0 || duration < 0 || duration > 8000)
+                    return "error: input_swipe arguments out of range";
+                return target.inputSwipe(x1, y1, x2, y2, duration);
+            }
+            case "input_keyevent":
+                if (args == null || args.length < 1) return "error: input_keyevent requires 1 arg";
+                return target.inputKeyevent((int) args[0]);
+            default: return "error: acción no permitida por el despachador asíncrono";
         }
     }
 

@@ -125,6 +125,7 @@ EOF
 | `amctl session-start` | Abre la sesión persistente (FIFO + rish). **Solo el usuario** |
 | `amctl status` | Backend activo, guardia y prueba de conexión |
 | `amctl doctor` | Comprueba si el receptor de CostPhone responde, sin volcar el árbol UI |
+| `amctl logs` | Exporta eventos, tiempos y la última traza fatal guardada |
 | `amctl session-stop` | Cierra la sesión (rish + tail + wrapper + FIFO) |
 
 - Con sesión, cada acción contra la app cuesta ~1 s en vez de ~3 s.
@@ -136,6 +137,8 @@ EOF
 - Si Shizuku no está iniciado, abre su app e inicia el servicio. En Android 11+ sin root suele requerir Depuración inalámbrica/emparejamiento ADB; CostPhone no puede saltarse esa autorización. Vuelve a CostPhone y concede permiso.
 - Si Termux no puede leer resultados compartidos, ejecuta `termux-setup-storage` y concede el permiso.
 - Usa IDs/textos conocidos y agrupa pasos con `amctl batch`; no uses `snap` ni PNG entre cada toque.
+- Si CostPhone va lento o se cierra, reabre la app y ejecuta `amctl logs`. Busca `PERF`, `QUEUE busy` o `LAST FATAL CRASH`; oculta datos privados antes de compartirlos.
+- Los árboles de accesibilidad tienen un límite de tamaño para proteger la memoria.
 
 ## Modos: safe (por defecto) y full
 
