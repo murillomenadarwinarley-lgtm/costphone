@@ -56,7 +56,12 @@ public final class Ui {
     public static LinearLayout card(Activity a) {
         LinearLayout c = new LinearLayout(a);
         c.setOrientation(LinearLayout.VERTICAL);
-        c.setBackground(shape(a, "surface", 20f, "border", 1f));
+        GradientDrawable bg = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{color(a, "surface2"), color(a, "surface")});
+        bg.setCornerRadius(dp(a, 20));
+        bg.setStroke(dp(a, 1), color(a, "border"));
+        c.setBackground(bg);
         c.setPadding(dp(a, 18), dp(a, 18), dp(a, 18), dp(a, 18));
         c.setElevation(dp(a, 1));
         return c;
