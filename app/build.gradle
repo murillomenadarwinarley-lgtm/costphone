@@ -18,7 +18,7 @@ android {
         main {
             manifest.srcFile "AndroidManifest.xml"
             java {
-                srcDirs = [".", "src"]
+                srcDirs = ["src"]
                 include "AccessibilityServiceImpl.java", "SettingsActivity.java", "CostPhoneShizukuService.java"
             }
             aidl.srcDirs = ["aidl"]
