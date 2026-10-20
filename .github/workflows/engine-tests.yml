@@ -111,7 +111,7 @@ jobs:
           assert len(replies) == 2, replies
           assert replies[0]["result"]["serverInfo"]["name"] == "costphone-pc"
           names = {tool["name"] for tool in replies[1]["result"]["tools"]}
-          expected = {"desktop_inspect", "desktop_screenshot", "desktop_launch_app", "desktop_open_url", "desktop_click", "desktop_type_text", "desktop_press_key"}
+          expected = {"desktop_inspect", "desktop_screenshot", "desktop_launch_app", "desktop_open_url", "desktop_click", "desktop_type_text", "desktop_press_key", "desktop_inspect_controls", "desktop_click_control", "desktop_set_control_text"}
           assert names == expected, names
           print("Native Windows MCP handshake and tool listing passed.")
           PY
