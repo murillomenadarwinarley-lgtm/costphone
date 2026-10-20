@@ -24,8 +24,10 @@ PACKAGE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+$")
 HEADER_RE = re.compile(r"^Pantalla(?:\s+—\s+display\s+\d+)?:\s*([^\s—]+)\s+—", re.MULTILINE)
 RISK_RE = re.compile(
     r"(?i)(?:^|[^a-z0-9])"
-    r"(?:send|submit|delete|remove|pay|purchase|buy|transfer|publish|post|"
-    r"checkout|confirm|call|share|place[_ -]?order|erase|clear|uninstall)"
+    r"(?:send|enviar|mandar|submit|delete|remove|borrar|eliminar|suprimir|"
+    r"pay|pagar|purchase|buy|comprar|transfer|transferir|publish|publicar|post|"
+    r"checkout|confirm|confirmar|call|llamar|share|compartir|accept|aceptar|"
+    r"place[_ -]?order|erase|clear|uninstall|cancel|cancelar|pedido|order)"
     r"(?:$|[^a-z0-9])"
 )
 MAX_PLAN_STEPS = 30
