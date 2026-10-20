@@ -111,6 +111,27 @@ amctl tapref @pN     →  toca ese elemento
 amctl snap           →  RE-SNAPSHOT (las refs se invalidan tras cada cambio)
 ```
 
+## Conexión Shizuku
+
+La pantalla **Conexión** distingue entre el servicio de Accesibilidad y Shizuku.
+Shizuku es opcional y añade una ruta privilegiada para operaciones específicas;
+no reemplaza la accesibilidad y no equivale a root.
+
+1. Instala e inicia Shizuku desde su fuente oficial: https://shizuku.rikka.app/
+2. En Android 11 o posterior, los dispositivos sin root pueden iniciarlo con
+   Depuración inalámbrica. En modo ADB normalmente hay que volver a iniciarlo
+   después de reiniciar Android.
+3. Abre CostPhone → **Conexión** → **Abrir Shizuku**. Concede el permiso cuando
+   Shizuku lo solicite y pulsa para verificar la conexión.
+4. Cuando aparezca el UID y el diagnóstico real, puedes crear una pantalla
+   virtual de CostPhone. La configuración usa `own_content_only` para evitar
+   que el display virtual espeje la pantalla que utiliza la persona.
+
+Las acciones de control visual siguen pasando por el servicio de Accesibilidad.
+El acceso Shizuku depende de la sesión y de los permisos que proporcione la
+versión de Android/dispositivo; la app muestra un error si la operación no está
+disponible.
+
 ## Pantalla virtual (v1.2) — el agente en su propio monitor
 
 CostPhone puede crear un **display secundario** dentro del teléfono y dirigir
@@ -162,13 +183,16 @@ en el lugar correcto y la registra en `AGENTS.md` automáticamente.
 ## Compilar el APK tú mismo
 
 ```sh
+pkg install gradle
 cd app
 bash build.sh          # -> build/CostPhone.apk
 ```
 
-Necesitas: `aapt2` y `javac` (JDK 17) en el PATH, y un SDK en `~/android-sdk`
-con `platforms/android-*/android.jar` + `build-tools/` (d8 + apksigner.jar).
-El keystore de debug (`~/.android/debug.keystore`) se crea solo la primera vez.
+Necesitas JDK 17, Gradle y Android SDK Platform 36 + Build Tools 36.0.0
+en `~/android-sdk` (o define `ANDROID_HOME`). Gradle descarga la API oficial
+de Shizuku y sus dependencias desde Maven Central. El APK de depuración queda
+en `app/build/CostPhone.apk`. La firma de depuración es local; no es una
+firma de publicación.
 
 Los íconos se regeneran del logo con `python3 gen-icons.py`
 (fuente: `app/assets/costphone-logo.png`).
@@ -194,10 +218,17 @@ Los íconos se regeneran del logo con `python3 gen-icons.py`
 - Los broadcasts van dirigidos explícitamente al paquete
   (`-p com.accessdroid.termux`), no son difundidos a todas las apps.
 - El servicio solo ejecuta comandos que traen el secreto compartido.
-- La app pide 2 permisos siempre (`BIND_ACCESSIBILITY_SERVICE`,
-  `QUERY_ALL_PACKAGES`) y uno opcional (`WRITE_SECURE_SETTINGS`, solo para crear
-  la pantalla virtual). Android no concede los que no sepidan; el opcional
-  arranca **sin** conceder y solo habilita `amctl display on/off`.
+- La app conserva el servicio de Accesibilidad y añade el proveedor oficial de Shizuku.
+  La autorización de Shizuku se solicita desde la pantalla **Conexión** y el
+  usuario puede denegarla.
+- La pantalla virtual puede crearse con Shizuku mediante una operación limitada
+  que siempre agrega `own_content_only`; al desactivarla, CostPhone quita solo
+  su configuración exacta y preserva las demás entradas de `overlay_display_devices`.
+- El servicio de Shizuku expone diagnósticos de solo lectura y esa operación
+  limitada. No acepta comandos de shell arbitrarios desde la interfaz o el modelo.
+- El permiso `WRITE_SECURE_SETTINGS` sigue en el manifiesto para compatibilidad
+  con el flujo anterior de Termux, pero el modo Shizuku no necesita concederlo
+  directamente a CostPhone.
 - ⚠️ En esta v1 el secreto es fijo (visible en el APK que distribuyes).
   Protege contra comandos casuales de apps ajenas, no contra una app
   maliciosa que ya conozca el secreto. Si te preocupa, cambia `SECRET` en
