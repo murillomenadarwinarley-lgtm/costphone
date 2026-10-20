@@ -15,9 +15,10 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 MAX_TYPED_TEXT = 4000
 MAX_APP_NAME = 260
+MAX_UI_CONTROLS = 200
 ALLOWED_KEYS = {
     "enter": "enter", "tab": "tab", "escape": "esc", "backspace": "backspace",
     "delete": "delete", "space": "space", "up": "up", "down": "down",
@@ -80,6 +81,31 @@ def validate_coordinate(value: Any, label: str) -> int:
     if type(value) is not int or value < 0 or value > 100000:
         raise EngineError("invalid_coordinates", f"{label} debe ser un entero entre 0 y 100000.")
     return value
+
+
+def validate_control_selector(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise EngineError("invalid_selector", "selector debe ser un objeto con name y/o automation_id.")
+    allowed = {"name", "automation_id", "control_type", "occurrence"}
+    extra = set(value) - allowed
+    if extra:
+        raise EngineError("invalid_selector", "El selector contiene propiedades no permitidas.", {"extra": sorted(extra)})
+    selector: dict[str, Any] = {}
+    for field in ("name", "automation_id", "control_type"):
+        item = value.get(field)
+        if item is None or item == "":
+            continue
+        if not isinstance(item, str) or len(item) > 300 or any(ord(char) < 32 for char in item):
+            raise EngineError("invalid_selector", f"selector.{field} debe ser texto válido de hasta 300 caracteres.")
+        selector[field] = item
+    if not selector.get("name") and not selector.get("automation_id"):
+        raise EngineError("invalid_selector", "El selector debe incluir name o automation_id.")
+    occurrence = value.get("occurrence")
+    if occurrence is not None:
+        if type(occurrence) is not int or not 0 <= occurrence < MAX_UI_CONTROLS:
+            raise EngineError("invalid_selector", f"selector.occurrence debe ser un entero de 0 a {MAX_UI_CONTROLS - 1}.")
+        selector["occurrence"] = occurrence
+    return selector
 
 
 class WindowsDesktopAdapter:
@@ -152,6 +178,7 @@ class WindowsDesktopAdapter:
 
         return {
             "title": title_buffer.value[:1000],
+            "window_handle": int(hwnd or 0),
             "process_id": int(process_id.value),
             "process_name": Path(process_path).name if process_path else "",
             "process_path": process_path,
@@ -159,6 +186,158 @@ class WindowsDesktopAdapter:
             "screen_height": int(user32.GetSystemMetrics(1)),
             "captured_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         }
+
+    @staticmethod
+    def _control_metadata(control: Any) -> dict[str, Any]:
+        info = control.element_info
+        try:
+            rect = control.rectangle()
+            bounds = {"left": int(rect.left), "top": int(rect.top), "right": int(rect.right), "bottom": int(rect.bottom)}
+        except Exception:
+            bounds = {"left": None, "top": None, "right": None, "bottom": None}
+        try:
+            enabled = bool(control.is_enabled())
+        except Exception:
+            enabled = False
+        try:
+            visible = bool(control.is_visible())
+        except Exception:
+            visible = False
+        return {
+            "name": str(getattr(info, "name", "") or "")[:300],
+            "automation_id": str(getattr(info, "automation_id", "") or "")[:300],
+            "control_type": str(getattr(info, "control_type", "") or "")[:100],
+            "class_name": str(getattr(info, "class_name", "") or "")[:160],
+            "enabled": enabled,
+            "visible": visible,
+            "bounds": bounds,
+        }
+
+    def _active_ui_controls(self) -> list[Any]:
+        self._require_windows()
+        window = self.inspect()
+        hwnd = window.get("window_handle")
+        if not hwnd:
+            raise EngineError("window_not_found", "No pude identificar una ventana activa para consultar sus controles.")
+        try:
+            from pywinauto import Desktop
+        except ImportError as exc:
+            raise EngineError("dependency_missing", "Falta pywinauto. Vuelve a ejecutar install-costphone-pc.ps1 para actualizar las dependencias.") from exc
+        try:
+            root = Desktop(backend="uia").window(handle=hwnd)
+            if not root.exists(timeout=2):
+                raise EngineError("window_not_found", "La ventana activa ya no está disponible; inspecciona de nuevo.")
+            return root.descendants()
+        except EngineError:
+            raise
+        except Exception as exc:
+            raise EngineError("uia_unavailable", "Windows UI Automation no pudo leer los controles de la ventana activa.", {"reason": str(exc)[:400]}) from exc
+
+    def list_controls(self, limit: int = 100) -> dict[str, Any]:
+        if type(limit) is not int or not 1 <= limit <= MAX_UI_CONTROLS:
+            raise EngineError("invalid_limit", f"limit debe ser un entero entre 1 y {MAX_UI_CONTROLS}.")
+        controls = self._active_ui_controls()
+        items: list[dict[str, Any]] = []
+        occurrences: dict[tuple[str, str, str], int] = {}
+        visible_count = 0
+        for control in controls:
+            try:
+                details = self._control_metadata(control)
+            except Exception:
+                continue
+            if not details["visible"]:
+                continue
+            visible_count += 1
+            if not details["name"] and not details["automation_id"]:
+                continue
+            signature = (
+                details["name"].casefold(),
+                details["automation_id"].casefold(),
+                details["control_type"].casefold(),
+            )
+            occurrence = occurrences.get(signature, 0)
+            occurrences[signature] = occurrence + 1
+            details["selector"] = {
+                "name": details["name"],
+                "automation_id": details["automation_id"],
+                "control_type": details["control_type"],
+                "occurrence": occurrence,
+            }
+            items.append(details)
+            if len(items) >= limit:
+                break
+        return {
+            "controls": items,
+            "returned": len(items),
+            "visible_descendants": visible_count,
+            "truncated": len(items) < visible_count and len(items) >= limit,
+            "selection_scope": "solo la ventana que estaba activa al iniciar esta consulta",
+        }
+
+    def _resolve_control(self, selector: dict[str, Any]) -> tuple[Any, dict[str, Any]]:
+        controls = self._active_ui_controls()
+        matches: list[tuple[Any, dict[str, Any]]] = []
+        for control in controls:
+            try:
+                details = self._control_metadata(control)
+            except Exception:
+                continue
+            if not details["visible"]:
+                continue
+            ok = True
+            for key in ("name", "automation_id", "control_type"):
+                wanted = selector.get(key)
+                if wanted is not None and details[key].casefold() != wanted.casefold():
+                    ok = False
+                    break
+            if ok:
+                matches.append((control, details))
+        if not matches:
+            raise EngineError("control_not_found", "No encontré el control indicado en la ventana activa. Vuelve a listar los controles antes de actuar.", {"selector": selector})
+        occurrence = selector.get("occurrence")
+        if occurrence is None and len(matches) > 1:
+            raise EngineError(
+                "ambiguous_control",
+                "El selector coincide con varios controles; lista los controles y especifica occurrence para distinguirlos.",
+                {"match_count": len(matches), "candidates": [item[1] for item in matches[:10]],
+            )
+        index = occurrence if occurrence is not None else 0
+        if index >= len(matches):
+            raise EngineError("control_not_found", "No existe esa occurrence del control en la ventana activa.", {"selector": selector, "match_count": len(matches)})
+        return matches[index]
+
+    def click_control(self, selector: dict[str, Any]) -> dict[str, Any]:
+        self._require_windows()
+        control, details = self._resolve_control(selector)
+        if not details["enabled"]:
+            raise EngineError("control_disabled", "Windows indica que el control está deshabilitado.", {"control": details})
+        try:
+            control.click_input()
+        except Exception as exc:
+            raise EngineError("control_click_failed", "No se pudo hacer clic en el control. Inspecciona la ventana de nuevo; no se repetirá la acción.", {"control": details, "reason": str(exc)[:300]}) from exc
+        return {"clicked": True, "control": details}
+
+    def set_control_text(self, selector: dict[str, Any], text: str) -> dict[str, Any]:
+        self._require_windows()
+        control, details = self._resolve_control(selector)
+        if details["control_type"].casefold() != "edit":
+            raise EngineError("not_edit_control", "Por seguridad, esta herramienta solo escribe en campos identificados por Windows como Edit.", {"control": details})
+        if not details["enabled"]:
+            raise EngineError("control_disabled", "Windows indica que el campo está deshabilitado.", {"control": details})
+        try:
+            try:
+                if bool(getattr(control.element_info, "is_password", False)):
+                    raise EngineError("password_field_blocked", "No escribiré en un campo identificado como contraseña mediante esta herramienta. Usa el flujo de autenticación de la aplicación.")
+            except EngineError:
+                raise
+            except Exception:
+                pass
+            control.set_edit_text(text)
+        except EngineError:
+            raise
+        except Exception as exc:
+            raise EngineError("control_text_failed", "Windows UI Automation no pudo establecer el texto del campo. El contenido puede no haberse modificado.", {"control": details, "reason": str(exc)[:300]}) from exc
+        return {"text_set": True, "characters": len(text), "control": details}
 
     def screenshot(self) -> dict[str, Any]:
         self._require_windows()
@@ -246,6 +425,17 @@ class WindowsDesktopEngine:
 
     def screenshot(self) -> dict[str, Any]:
         return {"ok": True, "version": VERSION, **self.adapter.screenshot()}
+
+    def list_controls(self, limit: Any = 100) -> dict[str, Any]:
+        return {"ok": True, "version": VERSION, **self.adapter.list_controls(limit=limit)}
+
+    def click_control(self, selector: Any) -> dict[str, Any]:
+        self._require_input()
+        return {"ok": True, **self.adapter.click_control(validate_control_selector(selector))}
+
+    def set_control_text(self, selector: Any, text: Any) -> dict[str, Any]:
+        self._require_input()
+        return {"ok": True, **self.adapter.set_control_text(validate_control_selector(selector), validate_text(text))}
 
     def launch_app(self, executable: Any) -> dict[str, Any]:
         return {"ok": True, **self.adapter.launch_app(validate_app_name(executable))}
