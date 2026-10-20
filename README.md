@@ -64,12 +64,17 @@ El instalador hace **todo**:
    - Toca **Instalar** (si Play Protect avisa → *Entendido*).
    - **Ajustes → Accesibilidad → CostPhone → Activar** ✅
 
-Prueba final:
+Prueba de conexión (solo al instalar/actualizar o si falla el agente):
 
 ```sh
-amctl tree     # debería imprimir la pantalla actual como texto
-amctl see      # captura PNG -> /sdcard/Download/accessdroid-shot.png
+amctl doctor   # ping autenticado Termux → CostPhone, con latencia y diagnóstico
+amctl snap     # comprueba la pantalla interactiva actual
 ```
+
+El instalador prefiere un APK local validado como v1.3; si solo encuentra una
+APK heredada v1.2, pide confirmación en vez de instalarla silenciosamente.
+Así se evita creer que está activa la nueva integración cuando se instaló un
+paquete antiguo.
 
 ## Uso
 
@@ -103,13 +108,47 @@ Extra v1.1: cuando el teclado o una toolbar flotante están abiertos, sus
 botones entran al snapshot marcados `[ime]` / `[ovl]` / `[sys]` — Enter,
 borrar y "Seleccionar todo" se tocan con `tapref` como cualquier elemento.
 
-### El loop (estilo agent-browser)
+### El loop del agente: instrucción natural → script → ejecución verificada
+
+La persona describe el resultado que necesita en lenguaje natural. La skill
+`phone-control` guía al agente para preparar un script Bash adaptado a esa tarea,
+ejecutar fases que se pueden agrupar de forma segura, inspeccionar la pantalla
+cuando hay que decidir y comprobar el resultado. No es una lista de atajos
+que el usuario tenga que memorizar.
+
+Para reducir la latencia, el agente evita inspecciones duplicadas, esperas fijas
+largas y consultas de pantalla completas cuando un snapshot interactivo basta.
+Si una decisión depende de la interfaz real, el script se detiene en ese punto
+para que el agente interprete el estado; no continúa a ciegas.
+
+### El loop de control visual (estilo agent-browser)
 
 ```
 amctl snap           →  lista interactiva con refs @pN
 amctl tapref @pN     →  toca ese elemento
 amctl snap           →  RE-SNAPSHOT (las refs se invalidan tras cada cambio)
 ```
+
+## Conexión Shizuku
+
+La pantalla **Conexión** distingue entre el servicio de Accesibilidad y Shizuku.
+Shizuku es opcional y añade una ruta privilegiada para operaciones específicas;
+no reemplaza la accesibilidad y no equivale a root.
+
+1. Instala e inicia Shizuku desde su fuente oficial: https://shizuku.rikka.app/
+2. En Android 11 o posterior, los dispositivos sin root pueden iniciarlo con
+   Depuración inalámbrica. En modo ADB normalmente hay que volver a iniciarlo
+   después de reiniciar Android.
+3. Abre CostPhone → **Conexión** → **Abrir Shizuku**. Concede el permiso cuando
+   Shizuku lo solicite y pulsa para verificar la conexión.
+4. Cuando aparezca el UID y el diagnóstico real, puedes crear una pantalla
+   virtual de CostPhone. La configuración usa `own_content_only` para evitar
+   que el display virtual espeje la pantalla que utiliza la persona.
+
+Las acciones de control visual siguen pasando por el servicio de Accesibilidad.
+El acceso Shizuku depende de la sesión y de los permisos que proporcione la
+versión de Android/dispositivo; la app muestra un error si la operación no está
+disponible.
 
 ## Pantalla virtual (v1.2) — el agente en su propio monitor
 
@@ -159,16 +198,27 @@ la pantalla 0) y la bitácora de cómo se descubrió esto:
 snapshot/tap, cómo leer el árbol, troubleshooting, etc. `install.sh` la deja
 en el lugar correcto y la registra en `AGENTS.md` automáticamente.
 
+## Firma original y actualizaciones (importante)
+
+Android necesita que el APK nuevo conserve el certificado de firma de la aplicación instalada. El workflow anterior publicaba una APK debug creada en un runner efímero, así que no garantizaba la firma original.
+
+**No desinstales la versión instalada.** Ahora la compilación de CI solo publica el artefacto `costphone-update-apk` cuando se configura el keystore original y el certificado SHA-256 del release coincide con el de `apk/CostPhone-v1.2.apk`. Si la clave falta o la firma no coincide, no se publica una APK de actualización.
+
+Consulta **[docs/firma-original.md](docs/firma-original.md)** para recuperar el keystore correcto y configurar los secretos privados de GitHub Actions. No subas el keystore ni sus contraseñas al repositorio ni a una conversación. También hay que confirmar que el certificado de la app instalada coincide con el APK heredado de referencia.
+
 ## Compilar el APK tú mismo
 
 ```sh
+pkg install gradle
 cd app
-bash build.sh          # -> build/CostPhone.apk
+bash build.sh
 ```
 
-Necesitas: `aapt2` y `javac` (JDK 17) en el PATH, y un SDK en `~/android-sdk`
-con `platforms/android-*/android.jar` + `build-tools/` (d8 + apksigner.jar).
-El keystore de debug (`~/.android/debug.keystore`) se crea solo la primera vez.
+Necesitas JDK 17, Gradle y Android SDK Platform 36 + Build Tools 36.0.0 en `~/android-sdk` (o define `ANDROID_HOME`).
+
+- Con el keystore original configurado en `COSTPHONE_KEYSTORE_PATH`, `COSTPHONE_KEYSTORE_PASSWORD`, `COSTPHONE_KEY_ALIAS` y `COSTPHONE_KEY_PASSWORD`, el script verifica la firma y genera `app/build/CostPhone.apk`.
+- Sin esa clave, solo genera `app/build/CostPhone-debug.apk` para pruebas. **No instales esa APK encima de CostPhone ni la distribuyas como actualización.**
+- Las credenciales locales no se guardan en el código. Los builds de pull request validan el código, pero no reciben las claves de firma ni publican el APK release.
 
 Los íconos se regeneran del logo con `python3 gen-icons.py`
 (fuente: `app/assets/costphone-logo.png`).
@@ -179,9 +229,14 @@ Los íconos se regeneran del logo con `python3 gen-icons.py`
   accesibilidad** (seguridad). Hay que reactivarlo:
   **Ajustes → Accesibilidad → CostPhone → Activar**. El panel de CostPhone
   lo muestra en rojo.
-- **“⚠ SERVICIO NO RESPONDE”** al usar amctl → el servicio está apagado.
-  Reactívalo como arriba. (amctl borra y verifica el archivo antes de leer —
-  nunca te dará una pantalla vieja.)
+- **“SIN RESPUESTA” en `amctl doctor`** → el comando no recibió el ping
+  autenticado. Comprueba que Termux tiene `~/bin/amctl` de esta rama, que la
+  app instalada es la versión actual y que está activo **Ajustes → Accesibilidad
+  → CostPhone**. El instalador solía priorizar un APK v1.2 incluido en el repo;
+  ahora exige validar v1.3 o confirma antes de recurrir al APK heredado.
+- **“⚠ SERVICIO NO RESPONDE”** en `snap/tree` → usa `amctl doctor` para
+  distinguir un transporte roto de un servicio apagado. Las salidas de
+  `snap/tree/see` se limpian antes de cada petición para no confundir datos viejos.
 - **Play Protect bloquea la instalación** (“Aplicación bloqueada para proteger
   tu dispositivo”) → toca *Entendido* y reintenta; si insiste, desactiva
   temporalmente el análisis en *Play Store → Play Protect*, instala, y
@@ -194,10 +249,17 @@ Los íconos se regeneran del logo con `python3 gen-icons.py`
 - Los broadcasts van dirigidos explícitamente al paquete
   (`-p com.accessdroid.termux`), no son difundidos a todas las apps.
 - El servicio solo ejecuta comandos que traen el secreto compartido.
-- La app pide 2 permisos siempre (`BIND_ACCESSIBILITY_SERVICE`,
-  `QUERY_ALL_PACKAGES`) y uno opcional (`WRITE_SECURE_SETTINGS`, solo para crear
-  la pantalla virtual). Android no concede los que no sepidan; el opcional
-  arranca **sin** conceder y solo habilita `amctl display on/off`.
+- La app conserva el servicio de Accesibilidad y añade el proveedor oficial de Shizuku.
+  La autorización de Shizuku se solicita desde la pantalla **Conexión** y el
+  usuario puede denegarla.
+- La pantalla virtual puede crearse con Shizuku mediante una operación limitada
+  que siempre agrega `own_content_only`; al desactivarla, CostPhone quita solo
+  su configuración exacta y preserva las demás entradas de `overlay_display_devices`.
+- El servicio de Shizuku expone diagnósticos de solo lectura y esa operación
+  limitada. No acepta comandos de shell arbitrarios desde la interfaz o el modelo.
+- El permiso `WRITE_SECURE_SETTINGS` sigue en el manifiesto para compatibilidad
+  con el flujo anterior de Termux, pero el modo Shizuku no necesita concederlo
+  directamente a CostPhone.
 - ⚠️ En esta v1 el secreto es fijo (visible en el APK que distribuyes).
   Protege contra comandos casuales de apps ajenas, no contra una app
   maliciosa que ya conozca el secreto. Si te preocupa, cambia `SECRET` en

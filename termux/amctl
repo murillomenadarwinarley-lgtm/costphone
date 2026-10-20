@@ -53,6 +53,7 @@
 #   display on [w h dpi flags] Crea la pantalla virtual (def: 1080 1920 320).
 #                              flags: gravity_top_left|top_right|bottom_left|bottom_right
 #   display off                La apaga
+#   doctor                      Diagnostica Termux -> broadcast -> AccessibilityService
 #   -d N / --display N         Dirige ESTA orden al display N (ej: amctl -d 2 snap).
 #                              Afecta a tap/swipe/type/click/snap/tree/see/launch/back.
 #                              Sin -d, todo va a la pantalla 0 (la del usuario).
@@ -110,6 +111,54 @@ ac() {
         echo "Settings -> Accessibility -> AccessDroid -> ON" >&2
         return 3
     fi
+}
+
+# ---- real round-trip health check; succeeds only if CostPhone receives the secret ----
+cmd_doctor() {
+    local nonce ping_file start_ms end_ms elapsed_ms report i
+    ping_file="/sdcard/Download/accessdroid-ping.txt"
+    nonce="${RANDOM}-${RANDOM}-$(date +%s)-${PPID}"
+    echo "CostPhone doctor"
+    echo "  paquete: $PKG"
+    echo "  transporte AM: $TRANSPORT"
+
+    if [[ "$TRANSPORT" == "socket" ]]; then
+        echo "  termux-am: disponible"
+    else
+        echo "  termux-am: no disponible; usando el transporte AM clásico"
+    fi
+
+    start_ms="$(python3 -c 'import time; print(time.monotonic_ns() // 1000000)' 2>/dev/null || echo 0)"
+    if ! bc com.accessdroid.termux.ACTION_PING --es nonce "$nonce"; then
+        echo "  ERROR: no se pudo enviar el broadcast de prueba."
+        echo "  Comprueba Termux:API/termux-am y vuelve a ejecutar amctl doctor."
+        return 3
+    fi
+
+    for i in {1..25}; do
+        if [[ -r "$ping_file" ]] && grep -Fqx "pong=$nonce" "$ping_file" 2>/dev/null; then
+            end_ms="$(python3 -c 'import time; print(time.monotonic_ns() // 1000000)' 2>/dev/null || echo 0)"
+            report="$(cat "$ping_file" 2>/dev/null || true)"
+            echo "  resultado: OK — CostPhone recibió el ping autenticado."
+            if [[ "$start_ms" != 0 && "$end_ms" != 0 ]]; then
+                elapsed_ms=$((end_ms - start_ms))
+                echo "  ida y vuelta: ${elapsed_ms} ms"
+            fi
+            printf '%s\n' "$report" | grep -v '^pong=' | sed 's/^/  /'
+            return 0
+        fi
+        sleep 0.12
+    done
+
+    echo "  resultado: SIN RESPUESTA"
+    echo "  El transporte pudo enviar el broadcast, pero el servicio no confirmó el ping."
+    echo "  Revisa en este orden:"
+    echo "   1. CostPhone está instalado (paquete $PKG)."
+    echo "   2. Android -> Ajustes -> Accesibilidad -> CostPhone -> Activado."
+    echo "   3. Abre CostPhone una vez tras actualizarla y vuelve a ejecutar doctor."
+    echo "   4. Comprueba que ~/bin/amctl y la APK pertenecen a la misma versión."
+    echo "   5. Si tree/snap también fallan, vuelve a instalar la APK actual y habilita Accesibilidad."
+    return 3
 }
 
 # ---- package resolution (substring match -> unique package) ----
@@ -497,6 +546,7 @@ case "${1:-help}" in
     presskey)  cmd_presskey "${2:-}" ;;
     display)   shift; cmd_display "$@" ;;
     displays)  cmd_display status ;;
+    doctor|ping) cmd_doctor ;;
     help|-h|--help)
         awk '/^#====/{c++; if(c==2) exit} c>=1{print}' "$0" | sed 's/^# \{0,1\}//' ;;
     *) echo "unknown command: $1 (use 'amctl help')" >&2; exit 1 ;;

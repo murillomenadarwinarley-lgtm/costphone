@@ -1,0 +1,157 @@
+name: Build CostPhone APK
+
+on:
+  push:
+    branches:
+      - ui/premium-dashboard
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and verify Android app
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Install Android platform and build tools
+        shell: bash
+        run: |
+          SDK_ROOT="/usr/local/lib/android/sdk"
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/16.0/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -maxdepth 3 -name sdkmanager -type f | sort | tail -1)"
+          fi
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses >/dev/null || true
+          "$SDKMANAGER" --sdk_root="$SDK_ROOT" "platforms;android-36" "build-tools;36.0.0"
+          if [[ ! -e "$HOME/android-sdk" ]]; then ln -s "$SDK_ROOT" "$HOME/android-sdk"; fi
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
+          echo "$SDK_ROOT/build-tools/36.0.0" >> "$GITHUB_PATH"
+
+      - name: Validate shell and agent tooling
+        shell: bash
+        run: |
+          for script in install.sh termux/amctl app/build.sh; do
+            bash -n "$script"
+          done
+          python3 -m py_compile termux/amctl-snap.py
+          test -s skill/phone-control/SKILL.md
+
+      - name: Inspect legacy APK signing certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          LEGACY_APK="$(find apk -maxdepth 1 -type f -name 'CostPhone-v*.apk' -print | sort -V | tail -n 1)"
+          test -s "$LEGACY_APK"
+          CERT="$(apksigner verify --print-certs "$LEGACY_APK" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print $2; exit}')"
+          test -n "$CERT"
+          echo "Legacy APK used as reference: $(basename "$LEGACY_APK")"
+          echo "Legacy signing certificate SHA-256: $CERT"
+          {
+            echo "## APK heredada: certificado de firma"
+            echo
+            echo "Referencia: $(basename "$LEGACY_APK")"
+            echo
+            echo "SHA-256 del certificado: $CERT"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Compile debug build for code validation only
+        shell: bash
+        run: |
+          gradle --no-daemon :app:assembleDebug
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          aapt2 dump badging "$APK" | grep -E "package:|application-label:|launchable-activity:"
+          apksigner verify "$APK"
+          echo "Debug APK compiled successfully; it is not published because its signer is not the original CostPhone signer." >> "$GITHUB_STEP_SUMMARY"
+
+      # Never expose signing secrets to pull_request builds.
+      - name: Build release APK and verify original signer
+        id: release
+        if: github.event_name != 'pull_request'
+        shell: bash
+        env:
+          COSTPHONE_KEYSTORE_BASE64: ${{ secrets.COSTPHONE_KEYSTORE_BASE64 }}
+          COSTPHONE_KEYSTORE_PASSWORD: ${{ secrets.COSTPHONE_KEYSTORE_PASSWORD }}
+          COSTPHONE_KEY_ALIAS: ${{ secrets.COSTPHONE_KEY_ALIAS }}
+          COSTPHONE_KEY_PASSWORD: ${{ secrets.COSTPHONE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$COSTPHONE_KEYSTORE_BASE64" || -z "$COSTPHONE_KEYSTORE_PASSWORD" || -z "$COSTPHONE_KEY_ALIAS" || -z "$COSTPHONE_KEY_PASSWORD" ]]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "## No se publicó una APK instalable como actualización"
+              echo
+              echo "Faltan los secretos de firma original de CostPhone. La APK debug solo valida el código y no se ofrece como actualización."
+              echo "Configura COSTPHONE_KEYSTORE_BASE64, COSTPHONE_KEYSTORE_PASSWORD, COSTPHONE_KEY_ALIAS y COSTPHONE_KEY_PASSWORD en Settings → Secrets and variables → Actions."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          LEGACY_APK="$(find apk -maxdepth 1 -type f -name 'CostPhone-v*.apk' -print | sort -V | tail -n 1)"
+          if [[ -z "$LEGACY_APK" || ! -s "$LEGACY_APK" ]]; then
+            echo "::error::No se encontró la APK heredada que sirve de referencia para la firma original."
+            exit 1
+          fi
+
+          legacy_package="$(aapt2 dump badging "$LEGACY_APK" | sed -n "s/^package: name='\([^']*\)'.*/\1/p" | head -n 1)"
+          if [[ "$legacy_package" != "com.accessdroid.termux" ]]; then
+            echo "::error::La APK de referencia no tiene el package id esperado."
+            exit 1
+          fi
+
+          KEYSTORE_PATH="$RUNNER_TEMP/costphone-original-signing.jks"
+          printf '%s' "$COSTPHONE_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          test -s "$KEYSTORE_PATH"
+          export COSTPHONE_KEYSTORE_PATH="$KEYSTORE_PATH"
+
+          gradle --no-daemon :app:assembleRelease
+          RELEASE_APK="app/build/outputs/apk/release/app-release.apk"
+          test -s "$RELEASE_APK"
+          aapt2 dump badging "$RELEASE_APK" | grep -q "package: name='com.accessdroid.termux'.*versionName='1.3'"
+          apksigner verify "$RELEASE_APK"
+
+          legacy_cert="$(apksigner verify --print-certs "$LEGACY_APK" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print $2; exit}' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+          release_cert="$(apksigner verify --print-certs "$RELEASE_APK" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print $2; exit}' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+          if [[ -z "$legacy_cert" || -z "$release_cert" || "$legacy_cert" != "$release_cert" ]]; then
+            echo "::error::El certificado de la APK nueva NO coincide con el de la CostPhone heredada. No se publicará; recupera la clave original correcta."
+            echo "La comparación de certificados falló. No instales esta APK sobre la app existente." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+          {
+            echo "## APK de actualización verificada"
+            echo
+            echo "La APK release se compiló y su certificado SHA-256 coincide con el de la APK CostPhone heredada incluida en el repositorio."
+            echo
+            echo "$release_cert"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload updateable CostPhone APK
+        if: steps.release.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: costphone-update-apk
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 7

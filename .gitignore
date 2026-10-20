@@ -2,3 +2,16 @@ app/build/
 *.tmp
 *.log
 __pycache__/
+
+# Gradle / Android local outputs
+.gradle/
+local.properties
+app/.gradle/
+app/build/
+
+# Never commit private signing material or local signing configuration
+*.jks
+*.keystore
+*.p12
+*.pfx
+keystore.properties
