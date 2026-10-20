@@ -1013,7 +1013,7 @@ cmd_batch() {
         line_no=$((line_no + 1))
         [[ "$line" =~ ^[[:space:]]*$ ]] && continue
         first_char="${line#"${line%%[![:space:]]*}"}"
-        [[ "$first_char" == #* ]] && continue
+        case "$first_char" in \#*) continue ;; esac
         line="$first_char"
         cmd="${line%%[[:space:]]*}"
         rest="${line#"$cmd"}"
