@@ -5,7 +5,7 @@ description: "Control del teléfono Android del usuario desde Termux con amctl (
 
 # phone-control — el teléfono como un navegador
 
-Equivalente móvil de agent-browser. El CLI es `amctl` (~/bin/amctl), que habla
+Equivalente móvil de agent-browser. El usuario puede describir la tarea con lenguaje natural; el agente usa `amctl` (~/bin/amctl) para hablar
 con el servicio de accesibilidad CostPhone (com.accessdroid.termux) e incluye
 el `secret` automáticamente.
 
@@ -34,6 +34,29 @@ Para tareas normales, sigue este orden y no hagas inspección redundante:
 6. No uses `amctl tree` para sustituir un snapshot simple. Recurre a `tree` para depurar una pantalla cuando `snap` no incluya el dato necesario y a `see` cuando haga falta contexto visual.
 
 Antes de enviar mensajes, publicar, eliminar datos o confirmar acciones externas, valida el destinatario/objetivo y pide confirmación cuando corresponda. El modo rápido no elimina la verificación de acciones importantes.
+
+## Ejecución desde una instrucción natural: plan + script adaptativo
+
+El usuario describe el resultado que quiere, no tiene que conocer `amctl` ni elegir entre comandos.
+
+Para una tarea de varios pasos:
+
+1. Convierte la petición en un objetivo comprobable y determina la app, los datos de destino y qué significará que haya terminado.
+2. Escribe un **script Bash temporal y específico para esa tarea** usando un heredoc; no agregues un atajo permanente para una sola petición. Usa `set -Eeuo pipefail`, funciones pequeñas con nombres descriptivos y salida breve por fase.
+3. Ejecuta juntas las acciones que sean seguras y previsibles en la misma pantalla. Deja que el script compruebe las condiciones conocidas, guarde la salida necesaria y se detenga si el estado no coincide.
+4. Cuando aparezca una decisión que dependa del contenido real de la pantalla, solicita el snapshot compacto, deja que el modelo lo interprete y luego continúa el mismo flujo con el siguiente bloque de script. **No automatices a ciegas toda una tarea impredecible** solo para reducir llamadas al modelo.
+5. Tras un cambio de pantalla, vuelve a inspeccionar antes de usar referencias. Si el comando falla, observa el estado actual una vez, ajusta el plan y reintenta solo si la acción es segura.
+6. Verifica el resultado final con la señal más pequeña que sea suficiente (texto, estado o snapshot). Resume qué se completó y qué quedó pendiente; nunca declares éxito solo porque el comando terminó.
+
+### Cómo reducir latencia sin volver al usuario un operador de comandos
+
+- No ejecutes `doctor` en cada tarea. Úsalo al iniciar, después de instalar/actualizar la APK o cuando falle el transporte.
+- No llames a `snap`, `tree` y `see` de forma rutinaria. Empieza por `snap`; amplía a `tree` o `see` únicamente si falta la información necesaria.
+- Evita esperas fijas largas. Para cargas variables, usa un bucle acotado que espere a una condición observable o falle con un diagnóstico claro.
+- Agrupa operaciones de la misma pantalla y devuelve solo el fragmento útil de la salida. No ocultes fallos ni suprimas todo stderr.
+- Reutiliza datos de pantalla mientras la vista siga igual; invalida las referencias al navegar, abrir diálogos, sacar el teclado o hacer scroll.
+- Selecciona un modelo rápido con *tool calling* para tareas claras; reserva el razonamiento más potente para ambigüedades, errores de recuperación o tareas con muchas dependencias.
+- No envíes mensajes, publiques, borres contenido ni confirmes acciones externas sensibles sin verificar destino y autorización. Optimizar latencia no significa saltarse la verificación.
 
 ## Leer la pantalla
 
