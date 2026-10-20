@@ -294,6 +294,14 @@ Detalle completo y límites: `docs/pantalla-virtual.md` en el repo de CostPhone.
 - No cerrar sesiones de cuentas del usuario ni tocar credenciales.
 - No desactivar la guardia ni abrir el modo full: son decisiones del usuario.
 
+## Rendimiento y estabilidad (v1.6.5)
+
+- La app carga cada pestaña cuando se abre por primera vez, no todas al inicio.
+- Los comandos del servicio se procesan en una cola serial de fondo; los árboles de UI y la compresión/guardado de capturas no deben bloquear el hilo visual.
+- La lista visual del registro limita el renderizado a los 80 eventos más recientes. El registro del servicio sigue disponible para el diagnóstico.
+- Si tras actualizar el servicio aparece desconectado, vuelve a activarlo en Ajustes → Accesibilidad → CostPhone; Android puede deshabilitarlo al reinstalar una APK.
+- Para investigar un cierre, recopila una traza después de reproducirlo: `adb logcat -d -t 2000 | grep -E 'FATAL EXCEPTION|ANR in|CostPhone|AccessDroid'`. Busca especialmente `FATAL EXCEPTION`, `ANR in` y la primera traza de CostPhone.
+
 ## Troubleshooting
 
 - ⚠ **IMPORTANTE — al instalar/actualizar la app, Android DESACTIVA el servicio
