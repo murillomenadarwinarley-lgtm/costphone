@@ -47,6 +47,15 @@ jobs:
           echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
           echo "$SDK_ROOT/build-tools/36.0.0" >> "$GITHUB_PATH"
 
+      - name: Validate shell and agent tooling
+        shell: bash
+        run: |
+          for script in install.sh termux/amctl app/build.sh; do
+            bash -n "$script"
+          done
+          python3 -m py_compile termux/amctl-snap.py
+          test -s skill/phone-control/SKILL.md
+
       - name: Compile and package
         run: gradle --no-daemon :app:assembleDebug
 
