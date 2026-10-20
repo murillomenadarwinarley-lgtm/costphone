@@ -19,7 +19,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 from urllib.parse import urlparse
 
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 PACKAGE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+$")
 HEADER_RE = re.compile(r"^Pantalla(?:\s+—\s+display\s+\d+)?:\s*([^\s—]+)\s+—", re.MULTILINE)
 RISK_RE = re.compile(
@@ -82,7 +82,7 @@ class Snapshot:
 class AmctlAdapter:
     """A narrow, argv-only adapter for the already-installed amctl command."""
 
-    def __init__(self, executable: str = "amctl", timeout_s: float = 15.0):
+    def __init__(self, executable: str = "amctl", timeout_s: float = 30.0):
         self.executable = executable
         self.timeout_s = timeout_s
 
@@ -196,7 +196,7 @@ class AmctlAdapter:
         else:
             raise EngineError("unsupported_action", "La acción no está permitida.", {"kind": kind})
 
-        output, rc, elapsed = self._run(args, timeout_s=float(action.get("command_timeout_s", 15)))
+        output, rc, elapsed = self._run(args, timeout_s=float(action.get("command_timeout_s", 30)))
         if rc != 0:
             # Never auto-retry a UI action: a timeout can happen after an action took effect.
             raise EngineError(
