@@ -1,4 +1,4 @@
-# CostPhone Engine 0.1.1
+# CostPhone Engine 0.1.2
 
 CostPhone Engine is an **additive, opt-in orchestration layer** above the existing amctl CLI. It does not replace the Android APK, Accessibility service, Shizuku transport, updater, or existing phone-control skill. It uses only Python's standard library and invokes amctl with argument arrays; it never evaluates task text as shell commands.
 
@@ -10,7 +10,7 @@ CostPhone Engine is an **additive, opt-in orchestration layer** above the existi
 - Sensitive button actions (for example Send, Delete, Pay, Publish, Checkout and Enter) are blocked by default. There is no automatic action retry.
 - No Python packages, APK rebuild, or modification of existing amctl commands is required.
 
-This is a first engine foundation, not a promise that every Android app can be automated completely. Applications that do not expose useful accessibility data may need a future visual-perception adapter. The engine cannot prove facts that the app does not expose.
+The engine is general-purpose across Android apps and workflows when the target exposes usable accessibility data and the required permissions are granted. It is not a promise that every app or task can be automated completely; apps that expose little accessibility data may need a future visual-perception adapter. Applications that do not expose useful accessibility data may need a future visual-perception adapter. The engine cannot prove facts that the app does not expose.
 
 ## Install separately (does not change the existing updater)
 
@@ -42,11 +42,17 @@ Add the following entry under the existing mcp object in ~/.config/opencode/open
   "type": "local",
   "command": ["/data/data/com.termux/files/home/bin/costphone-mcp"],
   "enabled": true,
-  "timeout": 10000
+  "timeout": 120000
 }
 ~~~
 
-The entry's key can be costphone-engine. Restart OpenCode after saving the configuration. The server uses MCP over stdio; it writes protocol data to stdout and no diagnostic banners.
+The entry's key can be costphone-engine. A 120000 ms client timeout accommodates slower Android commands; the engine command timeout is 30 seconds by default. Restart OpenCode after saving the configuration. The server uses MCP over stdio; it writes protocol data to stdout and no diagnostic banners.
+
+## Use it with other AI clients or without OpenCode
+
+The engine is not tied to OpenCode. Any AI client that supports a local MCP server over stdio can connect to `~/bin/costphone-mcp` using the same command and arguments. Merge the server entry into that client's MCP configuration, using the actual Termux home path and a sufficiently long client timeout. The client must be able to launch a local process on the same device; a cloud-only AI chat cannot directly control the phone just by knowing this repository URL.
+
+For non-AI or custom integrations, use the CLI directly: `costphone-engine inspect`, `costphone-engine launch PACKAGE`, `costphone-engine validate plan.json`, and `costphone-engine run plan.json`. An agent or wrapper can generate the JSON plan and call the CLI, but should not treat CLI text as proof of an external effect. The engine is a deterministic executor; the AI client supplies task interpretation and plan construction.
 
 ## Sensitive actions
 
@@ -114,9 +120,9 @@ A plan can be validated with phone_validate_plan before execution. Use phone_run
 - A failed action is never retried automatically, because an action can succeed even if its confirmation is lost.
 - Each execution stage returns an error if the preconditions or postconditions do not match. Earlier actions in a multi-stage plan may already have happened; inspect the returned stage and do not blindly rerun the whole plan.
 - Successful live results report `postconditions_matched`, a timing breakdown, and `verification_scope=foreground_package_and_visible_accessibility_text`. Do not infer that a real-world operation (such as sending a message) succeeded merely because the expected text appears somewhere in an accessibility snapshot. Require evidence specific to the destination and result; otherwise report the outcome as unverified.
-- The 15–20 second objective is not guaranteed. Use the timing breakdown to identify actual costs; never skip required context checks to meet a target.
+- Short tasks target roughly 10–20 seconds where the app, device and accessibility service permit it; this is a performance goal, not a guarantee. Use the timing breakdown to identify actual costs; never skip required context checks to meet a target.
 - Keep Android's Accessibility and Shizuku authorizations intact. The engine does not bypass permissions or disable the existing guard.
-- The 10–20 second target is a performance goal for simple tasks, not a measured or guaranteed result yet. Test on the actual phone before relying on it.
+- The 10–20 second target applies to short, low-complexity tasks only. Multi-screen workflows, slow apps, permissions, network waits, and external confirmations can take longer.
 
 ## Development
 
