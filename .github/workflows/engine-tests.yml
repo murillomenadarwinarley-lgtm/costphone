@@ -20,6 +20,9 @@ on:
       - "skill/costphone-engine/**"
       - "termux/install-costphone-engine.sh"
       - ".github/workflows/engine-tests.yml"
+      - "pc/windows/**"
+      - "docs/pc-native-windows.md"
+      - "README.md"
   workflow_dispatch:
 
 permissions:
@@ -39,18 +42,21 @@ jobs:
 
       - name: Syntax checks
         run: |
-          python -m py_compile engine/costphone_engine.py engine/mcp_server.py engine/test_engine.py
+          python -m py_compile engine/costphone_engine.py engine/mcp_server.py engine/test_engine.py engine/windows_engine.py engine/windows_mcp_server.py engine/test_windows_engine.py
           bash -n termux/install-costphone-engine.sh
 
-      - name: Validate Windows setup script syntax (PowerShell)
+      - name: Validate Windows setup scripts syntax (PowerShell)
         shell: pwsh
         run: |
-          $tokens = $null
-          $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile("pc/windows/setup-costphone.ps1", [ref]$tokens, [ref]$errors) | Out-Null
-          if ($errors.Count -gt 0) {
-            $errors | ForEach-Object { Write-Error $_ }
-            exit 1
+          $files = @("pc/windows/setup-costphone.ps1", "pc/windows/install-costphone-pc.ps1")
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($file, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_ }
+              exit 1
+            }
           }
           Write-Host "PowerShell syntax OK"
 
@@ -86,4 +92,21 @@ jobs:
           names = {tool["name"] for tool in replies[1]["result"]["tools"]}
           assert names == {"phone_inspect", "phone_launch", "phone_validate_plan", "phone_run_plan"}, names
           print("MCP handshake and tool listing passed.")
+          PY
+      - name: Native Windows MCP protocol smoke test
+        run: |
+          printf '%s\\n' \\
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05"}}' \\
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \\
+            | python engine/windows_mcp_server.py > /tmp/costphone-pc-mcp.jsonl
+          python - <<'PY'
+          import json
+          with open("/tmp/costphone-pc-mcp.jsonl", encoding="utf-8") as fh:
+              replies = [json.loads(line) for line in fh if line.strip()]
+          assert len(replies) == 2, replies
+          assert replies[0]["result"]["serverInfo"]["name"] == "costphone-pc"
+          names = {tool["name"] for tool in replies[1]["result"]["tools"]}
+          expected = {"desktop_inspect", "desktop_screenshot", "desktop_launch_app", "desktop_open_url", "desktop_click", "desktop_type_text", "desktop_press_key"}
+          assert names == expected, names
+          print("Native Windows MCP handshake and tool listing passed.")
           PY
