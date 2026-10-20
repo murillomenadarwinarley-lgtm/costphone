@@ -5,7 +5,7 @@ description: "Control del teléfono Android desde Termux con CostPhone/amctl. En
 
 # Phone control — modo rápido
 
-**Objetivo:** terminar la tarea, no narrar ni diagnosticar. Usa el mínimo de llamadas al terminal. No generes capturas ni vuelques árboles por rutina.
+**Objetivo:** terminar la tarea, no narrar ni diagnosticar. Usa el mínimo de llamadas al terminal. No generes capturas ni vuelques árboles por rutina. Carga esta skill antes del primer comando de teléfono; no empieces comprobando la pantalla de Termux.
 
 ## Preparación rápida de la ruta Shizuku
 
@@ -18,17 +18,17 @@ if command -v rish >/dev/null 2>&1; then SESSION_START_WAIT=4 amctl session-star
 Si responde `sesión rish activa`, reutilízala para las siguientes tareas; no repitas el arranque ni ejecutes `amctl status` en cada tarea. Si falla, no insistas en bucle: usa la ruta `am` clásica y avisa del problema solo si afecta la tarea. El propietario debe haber iniciado el servidor de Shizuku y concedido permiso a CostPhone; no se puede saltar esa autorización.
 
 
-## Flujo de mínima latencia
-1. Reutiliza la sesión rish si ya está activa. No hagas comprobaciones de estado por rutina.
-2. Abre la app solo si aún no está en primer plano.
-3. Usa el selector que esté documentado **en la pantalla actual**. No des por válido un ID recordado si no coincide con el snapshot actual.
-4. Agrupa acciones conocidas en un único `amctl batch`. No hagas una llamada al modelo entre cada toque.
-5. Usa una espera corta y relevante (3–5 s para una transición local rápida); no pongas 8–10 s por defecto.
-6. Haz una sola lectura textual si el primer selector no produce el cambio esperado. No repitas el mismo click, no uses referencias de pantallas anteriores y no abras capturas PNG para una tarea normal.
-7. Comprueba el resultado una sola vez al final; no vuelvas a Termux solo para redactar un informe técnico.
+## Flujo obligatorio de mínima latencia
+1. Reutiliza la sesión rish si ya está activa. No hagas `status`, `doctor` ni `snap` de diagnóstico en cada tarea.
+2. **Si la app objetivo es conocida, empieza con `amctl launch <paquete>`**. No ejecutes antes `waittext`, `snap`, `home` ni `sleep`. La CLI confirma el primer plano y devuelve error rápido si Android deja la app en el launcher.
+3. Si `launch` confirma el primer plano, actúa directamente usando un selector fiable. Si devuelve error, haz solo un `amctl snap` nuevo para ver la pantalla real; no reutilices referencias antiguas.
+4. Para WhatsApp, la pantalla de chats muestra `com.whatsapp:id/search_bar_inner_layout` con la etiqueta `Preguntar a Meta AI o buscar`. No uses `com.whatsapp:id/menuitem_search` a menos que esté en la pantalla actual. Si el chat deseado aparece ya en la lista actual, toca ese resultado; busca por texto solo si no aparece.
+5. Agrupa acciones conocidas en un único `amctl batch`. No hagas una llamada al modelo entre cada toque.
+6. Usa espera de 3–5 s para transiciones locales; evita `sleep` fijo y espera 8–10 s por defecto. Deja que `waittext` haga la espera.
+7. Si un paso falla, haz una sola lectura textual, decide con ese estado y no repitas el mismo click. Verifica el resultado una vez al final.
 
 ### Ejemplo: encontrar un chat de WhatsApp
-Cuando el snapshot de WhatsApp muestre `Preguntar a Meta AI o buscar` con el ID `com.whatsapp:id/search_bar_inner_layout`, ese es el selector actual. No uses `com.whatsapp:id/menuitem_search` a menos que aparezca en el snapshot.
+Abre primero WhatsApp con `amctl launch com.whatsapp`; solo cuando confirme primer plano usa el selector actual. Cuando el snapshot muestre `Preguntar a Meta AI o buscar` con `com.whatsapp:id/search_bar_inner_layout`, ese es el selector correcto. No uses `com.whatsapp:id/menuitem_search` a menos que aparezca en la pantalla actual.
 
 ```bash
 amctl batch <<'EOF'
@@ -64,7 +64,7 @@ En `batch`, usa `waittext "texto con espacios" 8` con comillas normales. CostPho
 - Tras un timeout, la pantalla puede ser distinta. No vuelvas a usar referencias antiguas: mira una sola vez el estado y elige el siguiente paso.
 
 ## Regla para no perder tiempo
-No uses Python, timestamps, `amctl status`, `doctor`, `logs`, `tree` o PNG para una tarea normal. No abras Termux al final solo para reportar tiempo. Si hay que medir, crea la marca de tiempo antes del flujo y léela una vez al final con una ruta absoluta y válida.
+No uses Python, timestamps ni hagas scripts de medición durante la tarea. Si el usuario pide medir duración, una llamada breve al inicio puede guardar `time.monotonic()` en un archivo existente y una llamada al final calcula el total; no corrijas errores de formato en cadena. No uses `status`, `doctor`, `logs`, `tree` o PNG para una tarea normal. No abras Termux al final para mostrar un informe si el resultado ya quedó verificado; basta con responder una línea.
 
 El tiempo de razonamiento del modelo no se arregla con permisos del teléfono. Para tareas rutinarias, elige desde `/models` un modelo rápido que soporte bien herramientas y mantén un plan corto: una lectura cuando sea necesaria, un lote de acciones y una confirmación final. No narres cada paso ni generes informes largos.
 
