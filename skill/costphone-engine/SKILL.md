@@ -9,6 +9,14 @@ Usa el motor solo si las herramientas MCP phone_inspect, phone_launch, phone_val
 
 ## Reglas operativas
 
+## Objetivo de velocidad y alcance general
+
+- El motor es para tareas generales de Android, no para una app concreta. Funciona en la medida en que la app exponga controles accesibles y los permisos del dispositivo permitan la operación.
+- Para tareas cortas y de bajo riesgo, apunta a unos 10–20 segundos cuando sea viable. Es un objetivo de rendimiento, nunca una garantía.
+- Reduce latencia evitando llamadas MCP redundantes: observa el estado una vez, construye un plan breve con transiciones claras y envíalo en una llamada a `phone_run_plan`. No repitas inspecciones o lanzamientos si el estado recién verificado sigue siendo válido dentro de la misma etapa.
+- No elimines las comprobaciones obligatorias, no uses datos de pantalla obsoletos para un nuevo estado, y no recortes la verificación para alcanzar el tiempo objetivo. Si la app, la red o el servicio tardan, informa el tiempo real y la causa observada.
+- Revisa `timings` del resultado para optimizar según mediciones reales. No prometas 10–20 segundos para tareas largas, apps lentas ni operaciones que dependan de red o confirmación externa.
+
 1. Traduce la petición en una secuencia pequeña de estados esperados y acciones permitidas. No inventes paquetes, botones o texto de pantalla.
 2. Si se conoce el paquete objetivo, usa phone_launch para abrirlo y confirmar el primer plano; después usa phone_inspect para descubrir los controles actuales. Si el motor informa que Termux está delante o que no puede leer la pantalla, no desactives la guardia ni repitas comandos en bucle.
 3. Cada etapa de un plan debe tener:
@@ -52,3 +60,7 @@ Ejemplo de abrir la sección visible Network desde Ajustes:
 ~~~
 
 El motor no interpreta lenguaje natural: tú construyes el plan a partir de la petición y del estado observado. Si el texto accesible no permite diferenciar el destino, no adivines; pide una aclaración o detente.
+
+## Clientes compatibles
+
+OpenCode es una forma de usar el motor, no la única. Cualquier cliente de IA que soporte un servidor MCP local por stdio puede configurarse con el ejecutable `~/bin/costphone-mcp`. También puede invocarse desde scripts o agentes locales mediante la CLI `costphone-engine`; estos deben construir planes JSON válidos y respetar los mismos controles. Una IA remota sin acceso al dispositivo, a Termux o a un puente MCP local no puede manejar el teléfono directamente solo con el nombre del repositorio.
