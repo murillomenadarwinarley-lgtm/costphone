@@ -87,13 +87,13 @@ public class AccessibilityServiceImpl extends AccessibilityService {
     BroadcastReceiver receiver;
     // Cola interactiva corta: nunca dejar una larga fila de toques obsoletos.
     private final ThreadPoolExecutor commandExecutor = new ThreadPoolExecutor(
-            1, 1, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(12));
+            1, 1, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(32));
     // Árboles/capturas son caros; se aíslan para que no retrasen taps y escritura.
     private final ThreadPoolExecutor diagnosticExecutor = new ThreadPoolExecutor(
-            1, 1, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(2));
-    private static final int MAX_UI_TREE_LINES = 650;
-    private static final int MAX_UI_TREE_NODES = 2500;
-    private static final int MAX_SEARCH_NODES = 2000;
+            1, 1, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(4));
+    private static final int MAX_UI_TREE_LINES = 1200;
+    private static final int MAX_UI_TREE_NODES = 5000;
+    private static final int MAX_SEARCH_NODES = 3500;
     private static final int MAX_SEARCH_DEPTH = 32;
     // Shared secret – set via build-time constant or default. amctl must send it.
     static final String SECRET = "termux-accessdroid-2025";
@@ -186,12 +186,6 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                             if (queueWait >= 300L) {
                                 ConnectionLog.add("PERF command=" + command.getAction()
                                         + " queue_wait_ms=" + queueWait);
-                            }
-                            // No ejecutar taps/texto después de quedar obsoletos: se sienten como lag.
-                            if (!usesDiagnosticExecutor(command.getAction()) && queueWait >= 1000L) {
-                                ConnectionLog.add("PERF command=" + command.getAction()
-                                        + " outcome=stale_dropped queue_wait_ms=" + queueWait);
-                                return;
                             }
                             try {
                                 handleCommand(command);
@@ -302,8 +296,7 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                 || ACTION_SCREENDUMP.equals(action)
                 || ACTION_GET_FOREGROUND_PACKAGE.equals(action)
                 || ACTION_EXPORT_LOG.equals(action)
-                || ACTION_DISPLAY.equals(action)
-                || ACTION_DISPLAY_BACK.equals(action);
+                || ACTION_DISPLAY.equals(action);
     }
 
     @Override
@@ -836,10 +829,13 @@ public class AccessibilityServiceImpl extends AccessibilityService {
     }
 
     private void runShellOrFallback(int displayId, String action, Runnable fallback, Object... args) {
-        // Los gestos y teclas van por la API local de Accesibilidad, sin esperar
-        // un Binder/shell de Shizuku que puede quedar colgado. Shizuku sigue
-        // disponible para operaciones de shell explícitas y funciones avanzadas.
-        if (fallback != null) fallback.run();
+        // Preferir Shizuku cuando el UserService está enlazado: es el camino
+        // rápido habitual del proyecto. La llamada es asíncrona y no bloquea
+        // esta cola; si no está preparado, usar Accesibilidad de inmediato.
+        if (!ShizukuManager.runShellAsync(displayId, action, fallback, args)
+                && fallback != null) {
+            fallback.run();
+        }
     }
 
     /* -------------------------------------------------------------- */
