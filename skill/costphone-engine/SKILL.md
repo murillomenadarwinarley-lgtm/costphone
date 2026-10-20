@@ -7,8 +7,6 @@ description: "Motor local y verificable para automatizar tareas Android mediante
 
 Usa el motor solo si las herramientas MCP phone_inspect, phone_launch, phone_validate_plan y phone_run_plan están disponibles, o si el usuario pide explícitamente usar la CLI instalada. Esta skill no reemplaza la skill existente phone-control ni los comandos amctl.
 
-## Reglas operativas
-
 ## Objetivo de velocidad y alcance general
 
 - El motor es para tareas generales de Android, no para una app concreta. Funciona en la medida en que la app exponga controles accesibles y los permisos del dispositivo permitan la operación.
@@ -16,6 +14,8 @@ Usa el motor solo si las herramientas MCP phone_inspect, phone_launch, phone_val
 - Reduce latencia evitando llamadas MCP redundantes: observa el estado una vez, construye un plan breve con transiciones claras y envíalo en una llamada a `phone_run_plan`. No repitas inspecciones o lanzamientos si el estado recién verificado sigue siendo válido dentro de la misma etapa.
 - No elimines las comprobaciones obligatorias, no uses datos de pantalla obsoletos para un nuevo estado, y no recortes la verificación para alcanzar el tiempo objetivo. Si la app, la red o el servicio tardan, informa el tiempo real y la causa observada.
 - Revisa `timings` del resultado para optimizar según mediciones reales. No prometas 10–20 segundos para tareas largas, apps lentas ni operaciones que dependan de red o confirmación externa.
+
+## Reglas operativas
 
 1. Traduce la petición en una secuencia pequeña de estados esperados y acciones permitidas. No inventes paquetes, botones o texto de pantalla.
 2. Si se conoce el paquete objetivo, usa phone_launch para abrirlo y confirmar el primer plano; después usa phone_inspect para descubrir los controles actuales. Si el motor informa que Termux está delante o que no puede leer la pantalla, no desactives la guardia ni repitas comandos en bucle.
