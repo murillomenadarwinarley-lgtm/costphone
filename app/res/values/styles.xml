@@ -8,15 +8,20 @@
         <item name="android:windowLightNavigationBar">false</item>
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:textColorPrimary">@color/text</item>
+        <item name="android:textColorSecondary">@color/text2</item>
+        <item name="android:windowActionModeOverlay">true</item>
     </style>
 
     <style name="TextTitle">
-        <item name="android:textSize">20sp</item>
+        <item name="android:textSize">22sp</item>
         <item name="android:textColor">@color/text</item>
         <item name="android:textStyle">bold</item>
     </style>
     <style name="TextSection">
-        <item name="android:textSize">12sp</item>
+        <item name="android:textSize">11sp</item>
         <item name="android:textColor">@color/text3</item>
         <item name="android:textAllCaps">true</item>
         <item name="android:letterSpacing">0.08</item>
