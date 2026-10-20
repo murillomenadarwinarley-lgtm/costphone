@@ -875,15 +875,36 @@ cmd_launch() {
     if session_alive; then
         local sp="${1:-}"
         if [[ "$sp" =~ $AMCTL_PKG_RE ]]; then
-            amctl_log launch "am start -p $sp (sesión)"
-            if sh_exec "$AMCTL_MARKER_WAIT" am start --user 0 -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p "$sp"; then
-                if wait_foreground_package "$sp"; then
-                    echo "Launched $sp (sesión rish; primer plano confirmado)"
-                    return 0
-                fi
-                return 1
+            local comp=""
+            # En vez de confiar en "am start -p" (puede devolver exit 0 sin enfocar
+            # la app), resuelve y lanza el componente principal explícitamente.
+            if session_raw "cmd package resolve-activity --brief -c android.intent.category.LAUNCHER -a android.intent.action.MAIN $sp 2>/dev/null"; then
+                comp="$(printf '%s\n' "$SESSION_OUT" | grep -E '^[A-Za-z0-9_.]+/[A-Za-z0-9_.$]+' | tail -1)"
             fi
-            echo "aviso: 'am start' por sesión falló — uso la vía clásica" >&2
+            if [[ -n "$comp" ]]; then
+                amctl_log launch "am start -n $comp (sesión rish)"
+                sh_exec "$AMCTL_MARKER_WAIT" am start --user 0 -n "$comp" || {
+                    echo "amctl launch: el componente $comp no se pudo iniciar por rish." >&2
+                    return 1
+                }
+            else
+                amctl_log launch "am start -p $sp (sesión rish; resolver sin resultado)"
+                sh_exec "$AMCTL_MARKER_WAIT" am start --user 0 -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p "$sp" || {
+                    echo "aviso: 'am start' por sesión falló — uso la vía clásica" >&2
+                    return 1
+                }
+            fi
+            if wait_foreground_package "$sp"; then
+                echo "Launched $sp (sesión rish; primer plano confirmado)"
+                return 0
+            fi
+            # Un solo fallback si Android aceptó el Intent pero no puso la app al frente.
+            if sh_exec "$AMCTL_MARKER_WAIT" monkey -p "$sp" -c android.intent.category.LAUNCHER 1 &&
+                    wait_foreground_package "$sp"; then
+                echo "Launched $sp (sesión rish/monkey; primer plano confirmado)"
+                return 0
+            fi
+            return 1
         fi
     fi
     if [[ "$TRANSPORT" == "socket" ]]; then
