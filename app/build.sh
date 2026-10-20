@@ -222,6 +222,7 @@ RJAVA=($(find "$OUT/r_java" -name '*.java' | sort))
 # Colección explícita de fuentes Java que deben compilarse
 SRCS=(
     "AccessibilityServiceImpl.java"
+    "src/CrashReporter.java"
     "src/ConnectionLog.java"
     "src/KeepAliveService.java"
     "src/SettingsActivity.java"
