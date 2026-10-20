@@ -14,7 +14,7 @@ Usa el motor solo si las herramientas MCP phone_inspect, phone_launch, phone_val
 3. Cada etapa de un plan debe tener:
    - expect.package: paquete exacto de Android;
    - expect.contains: texto real que distinga el estado correcto;
-   - actions: una o pocas acciones allow-listed;
+   - actions: una o pocas acciones allow-listed; si hay más de una, cada acción posterior debe declarar action.requires con el texto que debe seguir visible antes de ese toque;
    - after.package y after.contains: prueba visible del resultado esperado.
 4. Usa IDs accesibles cuando sean fiables; de lo contrario, usa el texto visible exacto. No reutilices coordenadas ni referencias de snapshots anteriores.
 5. Para acciones que puedan enviar, publicar, borrar, pagar, llamar, compartir o confirmar, incluye action.requires con el destino y el contenido/contexto visible. El motor vuelve a leer la pantalla antes de esa acción. Si los efectos externos están bloqueados, no intentes eludirlo; comunica el bloqueo y deja que el usuario decida si modifica la configuración local.
