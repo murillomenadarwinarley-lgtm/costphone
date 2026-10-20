@@ -327,6 +327,12 @@ def validate_plan(plan: Any, allow_external_effects: bool = False) -> dict[str, 
             raise EngineError("invalid_plan", f"{prefix}.actions debe contener de 1 a {MAX_ACTIONS_PER_STEP} acciones.")
         after = _assertion(raw_step.get("after"), f"{prefix}.after", expect["package"])
         actions = [validate_action(item, allow_external_effects) for item in raw_actions]
+        for action_index, action in enumerate(actions[1:], start=2):
+            if not action.get("requires"):
+                raise EngineError(
+                    "invalid_plan",
+                    f"{prefix}: la acción {action_index} necesita requires para volver a comprobar la pantalla tras la acción anterior.",
+                )
         action_count += len(actions)
         validated_steps.append(
             {"launch": launch, "expect": expect, "actions": actions, "after": after}
