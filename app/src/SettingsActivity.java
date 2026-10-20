@@ -264,6 +264,9 @@ public class SettingsActivity extends Activity {
         ShizukuManager.get();
         requestNotificationPermission();
         requestLegacyStoragePermission();
+        // Si Android/OEM dejó habilitada Accesibilidad pero soltó el FGS,
+        // recuperarlo desde una Activity visible es una ruta segura.
+        if (isServiceEnabled()) KeepAliveService.start(this);
         refreshStatus();
         refreshShizuku();
         handler.removeCallbacks(connectionRefreshRunnable);
