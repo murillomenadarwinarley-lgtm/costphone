@@ -7,23 +7,39 @@ description: "Control del teléfono Android desde Termux con CostPhone/amctl. En
 
 **Objetivo:** terminar la tarea, no narrar ni diagnosticar. Usa el mínimo de llamadas al terminal. No generes capturas ni vuelques árboles por rutina.
 
-## Preparación rápida (solo una vez)
+## Preparación rápida de la ruta Shizuku
 
-El propietario del teléfono debe iniciar Shizuku y conceder a CostPhone el permiso si aún no lo hizo. Después, en Termux, ejecutar una vez:
+Al comenzar una sesión nueva del agente, si `rish` está instalado y aún no hay sesión viva, intenta una sola vez:
 
 ```bash
-amctl session-start
-amctl status
+if command -v rish >/dev/null 2>&1; then SESSION_START_WAIT=4 amctl session-start; fi
 ```
 
-Confirma que `sesión rish` aparezca activa. En el registro anterior estaba inactiva y el transporte era `am` clásico: eso añade sobrecarga por comando. No repitas estos pasos en cada tarea ni intentes iniciarlos en segundo plano desde el agente; si el permiso falta, pide al propietario que lo autorice en la app Shizuku/CostPhone.
+Si responde `sesión rish activa`, reutilízala para las siguientes tareas; no repitas el arranque ni ejecutes `amctl status` en cada tarea. Si falla, no insistas en bucle: usa la ruta `am` clásica y avisa del problema solo si afecta la tarea. El propietario debe haber iniciado el servidor de Shizuku y concedido permiso a CostPhone; no se puede saltar esa autorización.
 
-## Flujo
-1. Abre la app una sola vez con `amctl launch <paquete>` si no está abierta.
-2. Ve directo a un selector conocido (`clickid`, `click`) y agrupa pasos dependientes con `amctl batch`.
-3. Si el selector es desconocido, ejecuta un único `amctl snap`; usa esa referencia enseguida, antes de cambiar de pantalla. Usa `snap -a` solo cuando falte el control.
-4. Espera solo una condición que confirme el objetivo final. No hagas `waittext` después de cada toque.
-5. Si la pantalla cambia inesperadamente, toma una decisión con una sola lectura textual. No repitas el mismo plan ni hagas capturas en cadena.
+
+## Flujo de mínima latencia
+1. Reutiliza la sesión rish si ya está activa. No hagas comprobaciones de estado por rutina.
+2. Abre la app solo si aún no está en primer plano.
+3. Usa el selector que esté documentado **en la pantalla actual**. No des por válido un ID recordado si no coincide con el snapshot actual.
+4. Agrupa acciones conocidas en un único `amctl batch`. No hagas una llamada al modelo entre cada toque.
+5. Usa una espera corta y relevante (3–5 s para una transición local rápida); no pongas 8–10 s por defecto.
+6. Haz una sola lectura textual si el primer selector no produce el cambio esperado. No repitas el mismo click, no uses referencias de pantallas anteriores y no abras capturas PNG para una tarea normal.
+7. Comprueba el resultado una sola vez al final; no vuelvas a Termux solo para redactar un informe técnico.
+
+### Ejemplo: encontrar un chat de WhatsApp
+Cuando el snapshot de WhatsApp muestre `Preguntar a Meta AI o buscar` con el ID `com.whatsapp:id/search_bar_inner_layout`, ese es el selector actual. No uses `com.whatsapp:id/menuitem_search` a menos que aparezca en el snapshot.
+
+```bash
+amctl batch <<'EOF'
+clickid com.whatsapp:id/search_bar_inner_layout
+type Trion Systems
+waittext "Trion Systems" 5
+EOF
+```
+
+Si ya hay resultados y no está claro cuál es el chat correcto, haz **un solo** `amctl snap`, toca la referencia de la fila correcta y confirma que se abrió el chat. Respeta la ortografía del nombre visible: `Trion Systems` no es lo mismo que `Tryon Systems`.
+
 
 ## Ejemplo de acciones juntas
 
