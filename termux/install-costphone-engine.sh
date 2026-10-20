@@ -48,12 +48,13 @@ printf 'CLI: %s/costphone-engine\n' "$BIN"
 printf 'MCP: %s/costphone-mcp\n' "$BIN"
 printf 'Skill nueva: %s/SKILL.md\n' "$SKILL"
 printf '\nNo se modificaron el APK, amctl, el actualizador ni la configuración de OpenCode.\n'
-printf 'Para registrar MCP, agrega manualmente una entrada en ~/.config/opencode/opencode.json\n'
+printf 'Para registrar MCP, agrega manualmente una entrada en ~/.config/opencode/opencode.json o opencode.jsonc\n'
 printf 'sin reemplazar el archivo. Usa estos valores dentro del objeto mcp existente:\n\n'
 printf '  "costphone-engine": {\n'
 printf '    "type": "local",\n'
 printf '    "command": ["%s/costphone-mcp"],\n' "$BIN"
 printf '    "enabled": true,\n'
-printf '    "timeout": 10000\n'
+printf '    "timeout": 120000\n'
 printf '  }\n\n'
+printf 'Timeout recomendado para el cliente MCP: 120000 ms.\n'
 printf 'Reinicia OpenCode y prueba primero phone_inspect y phone_validate_plan.\n'
