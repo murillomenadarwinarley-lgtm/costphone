@@ -299,7 +299,7 @@ class WindowsDesktopAdapter:
             raise EngineError(
                 "ambiguous_control",
                 "El selector coincide con varios controles; lista los controles y especifica occurrence para distinguirlos.",
-                {"match_count": len(matches), "candidates": [item[1] for item in matches[:10]],
+                {"match_count": len(matches), "candidates": [item[1] for item in matches[:10]]},
             )
         index = occurrence if occurrence is not None else 0
         if index >= len(matches):
