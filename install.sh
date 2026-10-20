@@ -97,18 +97,29 @@ fi
 # --- 6. APK ----------------------------------------------------------------
 step "6/6  Instalando la app CostPhone (servicio de accesibilidad)..."
 
-# Nunca prefieras la APK heredada solo porque su nombre de versión es mayor.
-# El instalador debe usar primero el build actual (v1.3 + Shizuku + handshake).
+# Never install a stale ignored build or a bundled v1.2 file as if it were the current release.
 CURRENT_APK="$REPO_DIR/app/build/CostPhone.apk"
-if [[ -s "$CURRENT_APK" ]]; then
+SDK_ROOT="\${ANDROID_HOME:-$HOME/android-sdk}"
+AAPT2="$SDK_ROOT/build-tools/36.0.0/aapt2"
+
+is_current_apk() {
+    local candidate="$1"
+    [[ -s "$candidate" && -x "$AAPT2" ]] || return 1
+    "$AAPT2" dump badging "$candidate" 2>/dev/null | grep -q "versionName='1.3'"
+}
+
+if is_current_apk "$CURRENT_APK"; then
     APK_SRC="$CURRENT_APK"
-elif command -v gradle >/dev/null 2>&1 && [[ -s "${ANDROID_HOME:-$HOME/android-sdk}/platforms/android-36/android.jar" ]]; then
-    step "No hay APK actual; compilando CostPhone v1.3 desde el código..."
-    if (cd "$REPO_DIR/app" && bash build.sh); then
-        [[ -s "$CURRENT_APK" ]] && APK_SRC="$CURRENT_APK"
+elif command -v gradle >/dev/null 2>&1 && [[ -s "$SDK_ROOT/platforms/android-36/android.jar" ]]; then
+    step "Generando CostPhone v1.3 desde el código actual..."
+    if (cd "$REPO_DIR/app" && bash build.sh) && is_current_apk "$CURRENT_APK"; then
+        APK_SRC="$CURRENT_APK"
     else
-        warn "La compilación falló; no se instalará silenciosamente una APK antigua."
+        warn "La compilación no produjo un APK v1.3 válido; no se instalará silenciosamente una APK antigua."
     fi
+elif [[ -s "$CURRENT_APK" ]]; then
+    warn "Encontré app/build/CostPhone.apk, pero no puedo validar que sea v1.3."
+    warn "No se usará automáticamente, porque podría ser el APK antiguo que dejó un build anterior."
 fi
 
 if [[ -z "$APK_SRC" ]]; then
