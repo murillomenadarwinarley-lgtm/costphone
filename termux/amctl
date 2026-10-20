@@ -117,7 +117,7 @@ ac() {
 cmd_doctor() {
     local nonce ping_file start_ms end_ms elapsed_ms report i
     ping_file="/sdcard/Download/accessdroid-ping.txt"
-    nonce="${RANDOM}-${RANDOM}-$(date +%s)-$"
+    nonce="${RANDOM}-${RANDOM}-$(date +%s)-${PPID}"
     echo "CostPhone doctor"
     echo "  paquete: $PKG"
     echo "  transporte AM: $TRANSPORT"
