@@ -9,6 +9,8 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Registro de eventos de conexión, pensado para depurar con la app abierta.
@@ -29,7 +31,10 @@ public final class ConnectionLog {
     private static final int FILE_LINES = 400;
 
     private static final List<String> LINES = new ArrayList<>();
-    private static File file;
+    private static volatile File file;
+    // No bloquear UI/Accesibilidad al persistir eventos.
+    private static final ExecutorService DISK = Executors.newSingleThreadExecutor();
+    private static final long MAX_FILE_BYTES = 96L * 1024L;
 
     private ConnectionLog() { }
 
@@ -56,19 +61,45 @@ public final class ConnectionLog {
         }
     }
 
-    /** Añade una línea con la hora delante. */
-    public static synchronized void add(String msg) {
-        String stamp = new SimpleDateFormat("HH:mm:ss", Locale.US).format(new Date());
-        LINES.add(stamp + "  " + msg);
-        if (LINES.size() > FILE_LINES) trim();
-        if (file != null) {
-            try {
-                FileWriter w = new FileWriter(file, false);
-                int from = Math.max(0, LINES.size() - FILE_LINES);
-                for (int i = from; i < LINES.size(); i++) w.write(LINES.get(i) + "\n");
-                w.close();
-            } catch (Exception ignored) { }
+    /** Añade el evento a memoria; escribe al disco en segundo plano. */
+    public static void add(String msg) {
+        final String line;
+        final File target;
+        synchronized (ConnectionLog.class) {
+            String stamp = new SimpleDateFormat("HH:mm:ss", Locale.US).format(new Date());
+            line = stamp + "  " + msg;
+            LINES.add(line);
+            if (LINES.size() > FILE_LINES) trim();
+            target = file;
         }
+        if (target == null) return;
+        try {
+            DISK.execute(new Runnable() {
+                @Override public void run() {
+                    try (FileWriter w = new FileWriter(target, true)) {
+                        w.write(line);
+                        w.write("\\n");
+                    } catch (Exception ignored) { }
+                    if (target.length() > MAX_FILE_BYTES) compactFile(target);
+                }
+            });
+        } catch (Throwable ignored) { }
+    }
+
+    /** Compacta el archivo solo al superar 96 KiB y fuera del hilo llamador. */
+    private static void compactFile(File target) {
+        final List<String> snapshot;
+        synchronized (ConnectionLog.class) {
+            if (file != target) return;
+            int from = Math.max(0, LINES.size() - FILE_LINES);
+            snapshot = new ArrayList<>(LINES.subList(from, LINES.size()));
+        }
+        try (FileWriter w = new FileWriter(target, false)) {
+            for (String line : snapshot) {
+                w.write(line);
+                w.write("\\n");
+            }
+        } catch (Exception ignored) { }
     }
 
     /** Últimas líneas, de más vieja a más nueva. */
@@ -82,10 +113,28 @@ public final class ConnectionLog {
         return file == null ? null : file.getAbsolutePath();
     }
 
-    /** Vacía registro y fichero. */
-    public static synchronized void clear() {
-        LINES.clear();
-        if (file != null) file.delete();
+    /** Todas las líneas retenidas, para exportación de diagnóstico. */
+    public static synchronized List<String> dumpAll() {
+        int from = Math.max(0, LINES.size() - FILE_LINES);
+        return new ArrayList<>(LINES.subList(from, LINES.size()));
+    }
+
+    /** Vacía el registro y serializa el borrado tras cualquier escritura pendiente. */
+    public static void clear() {
+        final File target;
+        synchronized (ConnectionLog.class) {
+            LINES.clear();
+            target = file;
+        }
+        if (target != null) {
+            try {
+                DISK.execute(new Runnable() {
+                    @Override public void run() {
+                        try { if (target.exists()) target.delete(); } catch (Throwable ignored) { }
+                    }
+                });
+            } catch (Throwable ignored) { }
+        }
     }
 
     private static void trim() {

@@ -49,6 +49,7 @@ public class AccessibilityServiceImpl extends AccessibilityService {
     private static final String ACTION_SCREENDUMP = "com.accessdroid.termux.ACTION_SCREENDUMP";
     private static final String ACTION_GET_UI_TREE = "com.accessdroid.termux.ACTION_GET_UI_TREE";
     private static final String ACTION_GET_FOREGROUND_PACKAGE = "com.accessdroid.termux.ACTION_GET_FOREGROUND_PACKAGE";
+    private static final String ACTION_EXPORT_LOG = "com.accessdroid.termux.ACTION_EXPORT_LOG";
     // Extra actions for AI agent control
     private static final String ACTION_PINCH = "com.accessdroid.termux.ACTION_PINCH";
     private static final String ACTION_DOUBLE_TAP = "com.accessdroid.termux.ACTION_DOUBLE_TAP";
@@ -179,6 +180,7 @@ public class AccessibilityServiceImpl extends AccessibilityService {
         filter.addAction(ACTION_SCREENDUMP);
         filter.addAction(ACTION_GET_UI_TREE);
         filter.addAction(ACTION_GET_FOREGROUND_PACKAGE);
+        filter.addAction(ACTION_EXPORT_LOG);
         filter.addAction(ACTION_PINCH);
         filter.addAction(ACTION_DOUBLE_TAP);
         filter.addAction(ACTION_CLEAR_TEXT);
@@ -285,7 +287,9 @@ public class AccessibilityServiceImpl extends AccessibilityService {
             return;
         }
         Log.d(TAG, "cmd: " + action);
+        final long commandStart = android.os.SystemClock.elapsedRealtime();
 
+        try {
         switch (action) {
             case ACTION_TAP: {
                 int x = intent.getIntExtra("x", -1);
@@ -709,6 +713,27 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                 }
                 break;
             }
+            case ACTION_EXPORT_LOG: {
+                StringBuilder report = new StringBuilder();
+                report.append("CostPhone diagnostic log\\n");
+                report.append("SDK=").append(Build.VERSION.SDK_INT).append("\\n");
+                report.append("Time=").append(System.currentTimeMillis()).append("\\n");
+                for (String line : ConnectionLog.dumpAll()) report.append(line).append("\\n");
+                try {
+                    saveToDownloads("accessdroid-connection.log", "text/plain",
+                            report.toString().getBytes("UTF-8"));
+                } catch (Exception e) {
+                    Log.w(TAG, "No se pudo exportar el registro", e);
+                }
+                break;
+            }
+        }
+        } finally {
+            long elapsed = android.os.SystemClock.elapsedRealtime() - commandStart;
+            if (elapsed >= 60L) {
+                String safeAction = action.length() > 50 ? action.substring(0, 50) : action;
+                ConnectionLog.add("PERF command=" + safeAction + " duration_ms=" + elapsed);
+            }
         }
     }
 
@@ -764,14 +789,9 @@ public class AccessibilityServiceImpl extends AccessibilityService {
             // "There can be no more than one descendant prefetching strategy":
             // el framework no admite dos prefetches de accesibilidad a la vez y
             // el conflicto es transitorio. Un reintento lo resuelve casi siempre.
-            Log.w(TAG, "prefetch de accesibilidad ocupado, reintento d" + displayId);
-            try { Thread.sleep(80); } catch (InterruptedException ignored) { }
-            try {
-                return getRootInActiveWindow(displayId);
-            } catch (Exception e2) {
-                Log.w(TAG, "getRootInActiveWindow(" + displayId + ") también falló", e2);
-                return null;
-            }
+            // No dormir en el hilo principal de accesibilidad; el agente puede reintentar.
+            Log.w(TAG, "prefetch de accesibilidad ocupado en d" + displayId + "; se omite el intento");
+            return null;
         } catch (Exception e) { Log.w(TAG, "getRootInActiveWindow(" + displayId + ")", e); return null; }
     }
 

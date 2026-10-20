@@ -56,7 +56,7 @@ public final class ShizukuManager {
     /** Pausa entre intentos. */
     private static final long EXEC_RETRY_DELAY_MS = 200L;
     /** Si un comando de shell no vuelve en esto, se avisa (no se mata). */
-    private static final long EXEC_TIMEOUT_MS = 30000L;
+    private static final long EXEC_TIMEOUT_MS = 1800L;
 
     private static ShizukuManager sInstance;
 
@@ -248,6 +248,7 @@ public final class ShizukuManager {
             return false;   // aún no hay binder: accesibilidad, sin esperar
         }
         final String[] result = { null };
+        final boolean[] finished = { false };
         final Object gate = new Object();
         try {
             worker.execute(new Runnable() {
@@ -335,18 +336,33 @@ public final class ShizukuManager {
                     } catch (InterruptedException ignored) {
                         ConnectionLog.add("Shizuku: exec interrumpido");
                     } finally {
-                        synchronized (gate) { gate.notifyAll(); }
+                        synchronized (gate) {
+                            finished[0] = true;
+                            gate.notifyAll();
+                        }
                     }
                 }
             });
-            // Esperamos a que vuelva, con tope, para no bloquear el hilo de
-            // broadcast de accesibilidad para siempre.
+            // Espera condicional: si el worker acabó antes de wait(), no se pierde
+            // el notify. El tope corto evita congelar el hilo de accesibilidad.
+            long deadline = android.os.SystemClock.elapsedRealtime() + EXEC_TIMEOUT_MS;
             synchronized (gate) {
-                gate.wait(EXEC_TIMEOUT_MS);
+                while (!finished[0]) {
+                    long remaining = deadline - android.os.SystemClock.elapsedRealtime();
+                    if (remaining <= 0L) break;
+                    gate.wait(remaining);
+                }
+            }
+            if (!finished[0]) {
+                shell = null;
+                ConnectionLog.add("PERF Shizuku action=" + action + " timeout_ms="
+                        + EXEC_TIMEOUT_MS + " outcome=unknown_no_duplicate_fallback");
+                // La llamada Binder podría seguir activa; no repetimos un toque por
+                // accesibilidad, que podría ejecutar la acción dos veces.
+                return true;
             }
             if (result[0] == null) {
-                ConnectionLog.add("Shizuku: timeout (" + EXEC_TIMEOUT_MS
-                        + "ms) en '" + action + "', usando accesibilidad");
+                ConnectionLog.add("Shizuku: ejecución sin resultado para '" + action + "', usando accesibilidad");
                 return false;
             }
             String value = result[0];

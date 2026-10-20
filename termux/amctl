@@ -31,6 +31,7 @@
 #   session-stop             Cierra la sesión rish (rish + tail + FIFO)
 #   status                   Backend activo + si la sesión responde
 #   doctor                   Comprueba que CostPhone responde sin volcar el árbol UI
+#   logs                     Exporta el registro de CostPhone a Termux
 #   registro                 cada comando queda en ~/.amctl.log
 #   lista de bloqueo         ~/.config/amctl/blocked.txt (una app por línea)
 #   guardia                  todo tap/type/swipe/click/... va contra la app en primer
@@ -913,6 +914,21 @@ cmd_doctor() {
     return 2
 }
 
+cmd_logs() {
+    local f=/sdcard/Download/accessdroid-connection.log
+    rm -f "$f" 2>/dev/null
+    bc_raw com.accessdroid.termux.ACTION_EXPORT_LOG || {
+        echo "amctl logs: no se pudo pedir el registro; comprueba amctl doctor." >&2
+        return 1
+    }
+    wait_file "$f" 5 || {
+        echo "amctl logs: CostPhone no entregó el registro." >&2
+        echo "Ejecuta primero: amctl doctor" >&2
+        return 1
+    }
+    cat "$f"
+}
+
 cmd_tree() {
     local f=/sdcard/Download/accessdroid-tree.txt
     guard_readonly tree || return $?
@@ -1502,6 +1518,7 @@ case "${1:-help}" in
     session-stop)  cmd_stop_session ;;
     status)        cmd_status ;;
     doctor|ping)   cmd_doctor ;;
+    logs)          cmd_logs ;;
     list)      cmd_list "${2:-}" ;;
     find)      cmd_find "${2:-}" ;;
     launch)    cmd_launch "${2:-}" ;;
