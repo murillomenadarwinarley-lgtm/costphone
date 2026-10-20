@@ -91,9 +91,9 @@ public class AccessibilityServiceImpl extends AccessibilityService {
     // Árboles/capturas son caros; se aíslan para que no retrasen taps y escritura.
     private final ThreadPoolExecutor diagnosticExecutor = new ThreadPoolExecutor(
             1, 1, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(2));
-    private static final int MAX_UI_TREE_LINES = 800;
-    private static final int MAX_UI_TREE_NODES = 5000;
-    private static final int MAX_SEARCH_NODES = 3500;
+    private static final int MAX_UI_TREE_LINES = 650;
+    private static final int MAX_UI_TREE_NODES = 2500;
+    private static final int MAX_SEARCH_NODES = 2000;
     private static final int MAX_SEARCH_DEPTH = 32;
     // Shared secret – set via build-time constant or default. amctl must send it.
     static final String SECRET = "termux-accessdroid-2025";
@@ -1245,9 +1245,13 @@ public class AccessibilityServiceImpl extends AccessibilityService {
         } finally { try { root.recycle(); } catch (Throwable ignored) { } }
 
         List<AccessibilityWindowInfo> wins = windowsOf(displayId);
-        if (wins == null) return;
+        if (wins == null) {
+            if (visitedNodes[0] >= MAX_UI_TREE_NODES) out.add("# truncated: límite de " + MAX_UI_TREE_NODES + " nodos");
+            return;
+        }
         try {
-            for (int i = 0; i < wins.size() && out.size() < MAX_UI_TREE_LINES; i++) {
+            for (int i = 0; i < wins.size() && out.size() < MAX_UI_TREE_LINES
+                    && visitedNodes[0] < MAX_UI_TREE_NODES; i++) {
                 AccessibilityWindowInfo aw = wins.get(i);
                 if (aw == null || aw.getDisplayId() != displayId) continue;
                 AccessibilityNodeInfo wroot = null;
@@ -1265,7 +1269,11 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                 } finally { try { wroot.recycle(); } catch (Throwable ignored) { } }
             }
         } finally { recycleWindows(wins); }
-        if (out.size() >= MAX_UI_TREE_LINES) out.add("# truncated: límite de " + MAX_UI_TREE_LINES + " líneas");
+        if (out.size() >= MAX_UI_TREE_LINES) {
+            out.add("# truncated: límite de " + MAX_UI_TREE_LINES + " líneas");
+        } else if (visitedNodes[0] >= MAX_UI_TREE_NODES) {
+            out.add("# truncated: límite de " + MAX_UI_TREE_NODES + " nodos");
+        }
     }
 
     private String windowTag(int type) {
