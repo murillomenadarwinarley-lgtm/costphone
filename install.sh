@@ -1,16 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
 #==============================================================================
-# CostPhone — instalador todo-en-uno para Termux
-#
-# Instala:
-#   1. Dependencias: termux-am (transporte "am") + python
-#   2. Modificación del "am" de Termux (socket server + PATH)
-#   3. amctl + amctl-snap.py  ->  ~/bin
-#   4. Skill "phone-control"  ->  ~/.config/opencode/skills/android/
-#   5. Bloque de registro    ->  ~/.config/opencode/AGENTS.md
-#   6. APK CostPhone          ->  abre el instalador en el teléfono
-#
-# Uso:  bash install.sh
+# CostPhone — instalador para Termux. No instala builds con una firma distinta.
 #==============================================================================
 set -u
 
@@ -20,9 +10,9 @@ SKILL_DIR="$HOME/.config/opencode/skills/android/phone-control"
 AGENTS="$HOME/.config/opencode/AGENTS.md"
 APK_SRC=""
 
-G='\033[0;32m'; Y='\033[1;33m'; R='\033[0;31m'; N='\033[0m'
-step() { echo -e "${G}[+]${N} $*"; }
-warn() { echo -e "${Y}[!]${N} $*"; }
+G='\033[0;32m'; Y='\033[1;33m'; N='\033[0m'
+step() { echo -e "${G}[+] ${N}$*"; }
+warn() { echo -e "${Y}[!] ${N}$*"; }
 
 echo "══════════════════════════════════════════════════"
 echo "  CostPhone installer — control del teléfono desde Termux"
@@ -32,7 +22,7 @@ echo "════════════════════════�
 step "1/6  Instalando dependencias (termux-am, python)..."
 pkg install -y termux-am python >/dev/null 2>&1 || warn "pkg install falló — revisa tu conexión y re-ejecuta"
 
-# --- 2. Modificar el "am" de Termux ---------------------------------------
+# --- 2. Configurar termux-am ------------------------------------------------
 step "2/6  Configurando el transporte am (socket server + PATH)..."
 mkdir -p "$HOME/.termux"
 TP="$HOME/.termux/termux.properties"
@@ -45,9 +35,9 @@ if ! grep -q 'HOME/bin' "$HOME/.bashrc" 2>/dev/null; then
     echo 'export PATH="$HOME/bin:$PATH"' >> "$HOME/.bashrc"
 fi
 export PATH="$BIN:$PATH"
-echo "     am --version  =>  $(am --version 2>/dev/null || echo 'NO INSTALADO')"
+echo "     am --version => $(am --version 2>/dev/null || echo 'NO INSTALADO')"
 
-# --- 3. amctl --------------------------------------------------------------
+# --- 3. amctl ----------------------------------------------------------------
 step "3/6  Instalando amctl + amctl-snap.py en ~/bin..."
 mkdir -p "$BIN"
 cp "$REPO_DIR/termux/amctl" "$BIN/amctl"
@@ -55,7 +45,7 @@ cp "$REPO_DIR/termux/amctl-snap.py" "$BIN/amctl-snap.py"
 chmod +x "$BIN/amctl" "$BIN/amctl-snap.py"
 echo "     listo: $BIN/amctl"
 
-# --- 4. Skill para OpenCode ------------------------------------------------
+# --- 4. Skill para OpenCode -------------------------------------------------
 step "4/6  Instalando la skill 'phone-control' para OpenCode..."
 if [ -d "$HOME/.config/opencode" ]; then
     mkdir -p "$SKILL_DIR"
@@ -65,7 +55,7 @@ else
     warn "No hay ~/.config/opencode (¿OpenCode no instalado?) — skill omitida"
 fi
 
-# --- 5. AGENTS.md ----------------------------------------------------------
+# --- 5. AGENTS.md ------------------------------------------------------------
 step "5/6  Registrando la skill en AGENTS.md..."
 if [ -d "$HOME/.config/opencode" ]; then
     touch "$AGENTS"
@@ -94,48 +84,55 @@ PY
     echo "     bloque de agente actualizado en $AGENTS"
 fi
 
-# --- 6. APK ----------------------------------------------------------------
-step "6/6  Instalando la app CostPhone (servicio de accesibilidad)..."
+# --- 6. APK ------------------------------------------------------------------
+step "6/6  Preparando CostPhone v1.3..."
 
-# Never install a stale ignored build or a bundled v1.2 file as if it were the current release.
 CURRENT_APK="$REPO_DIR/app/build/CostPhone.apk"
-SDK_ROOT="\${ANDROID_HOME:-$HOME/android-sdk}"
+SDK_ROOT="${ANDROID_HOME:-$HOME/android-sdk}"
 AAPT2="$SDK_ROOT/build-tools/36.0.0/aapt2"
+APKSIGNER="$SDK_ROOT/build-tools/36.0.0/apksigner"
+LEGACY_APK="$(ls -1 "$REPO_DIR"/apk/CostPhone-v*.apk 2>/dev/null | sort -V | tail -1 || true)"
+
+certificate_sha256() {
+    local candidate="$1"
+    [[ -x "$APKSIGNER" && -s "$candidate" ]] || return 1
+    "$APKSIGNER" verify --print-certs "$candidate" 2>/dev/null |
+        awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print $2; exit}' |
+        tr -d '[:space:]' | tr '[:upper:]' '[:lower:]'
+}
 
 is_current_apk() {
     local candidate="$1"
-    [[ -s "$candidate" && -x "$AAPT2" ]] || return 1
-    "$AAPT2" dump badging "$candidate" 2>/dev/null | grep -q "versionName='1.3'"
+    [[ -s "$candidate" && -x "$AAPT2" && -n "$LEGACY_APK" && -s "$LEGACY_APK" ]] || return 1
+    "$AAPT2" dump badging "$candidate" 2>/dev/null |
+        grep -q "package: name='com.accessdroid.termux'.*versionName='1.3'" || return 1
+    local expected actual
+    expected="$(certificate_sha256 "$LEGACY_APK" || true)"
+    actual="$(certificate_sha256 "$candidate" || true)"
+    [[ -n "$expected" && "$expected" == "$actual" ]]
 }
 
 if is_current_apk "$CURRENT_APK"; then
     APK_SRC="$CURRENT_APK"
 elif command -v gradle >/dev/null 2>&1 && [[ -s "$SDK_ROOT/platforms/android-36/android.jar" ]]; then
-    step "Generando CostPhone v1.3 desde el código actual..."
+    step "Intentando compilar CostPhone..."
     if (cd "$REPO_DIR/app" && bash build.sh) && is_current_apk "$CURRENT_APK"; then
         APK_SRC="$CURRENT_APK"
     else
-        warn "La compilación no produjo un APK v1.3 válido; no se instalará silenciosamente una APK antigua."
+        warn "No hay una APK v1.3 con la firma original. No se abrirá la APK debug como actualización."
     fi
-elif [[ -s "$CURRENT_APK" ]]; then
-    warn "Encontré app/build/CostPhone.apk, pero no puedo validar que sea v1.3."
-    warn "No se usará automáticamente, porque podría ser el APK antiguo que dejó un build anterior."
+else
+    warn "No hay compilación local ni SDK suficiente para generar una APK firmada con la clave original."
 fi
 
 if [[ -z "$APK_SRC" ]]; then
-    LEGACY_APK="$(ls -1 "$REPO_DIR"/apk/CostPhone-v*.apk 2>/dev/null | sort -V | tail -1 || true)"
-    if [[ -n "$LEGACY_APK" && -s "$LEGACY_APK" ]]; then
-        warn "Solo está disponible la APK heredada $(basename "$LEGACY_APK"); no contiene la nueva integración Shizuku ni el diagnóstico de conexión."
-        if [[ -t 0 ]]; then
-            read -r -p "¿Instalar esa versión antigua para usar el modo clásico de Accesibilidad/Termux? [s/N] " legacy_choice
-            [[ "$legacy_choice" =~ ^[sS]$ ]] && APK_SRC="$LEGACY_APK"
-        elif [[ "${COSTPHONE_ALLOW_LEGACY_APK:-0}" == "1" ]]; then
-            APK_SRC="$LEGACY_APK"
-        else
-            warn "No se instala una APK antigua sin confirmación. Compila primero con 'cd app && bash build.sh' o descarga el APK actual desde la ejecución de GitHub Actions."
-        fi
+    warn "No se encontró una APK nueva cuya firma coincida con la APK heredada del repositorio."
+    warn "No desinstales CostPhone ni instales una APK debug: necesitamos la clave privada original."
+    if [[ -n "$LEGACY_APK" && -s "$LEGACY_APK" && "${COSTPHONE_ALLOW_LEGACY_APK:-0}" == "1" ]]; then
+        APK_SRC="$LEGACY_APK"
+        warn "COSTPHONE_ALLOW_LEGACY_APK=1: se abrirá la APK heredada v1.2, no la versión nueva."
     else
-        warn "No se encontró CostPhone.apk. Compila con 'cd app && bash build.sh' o descarga el APK actual desde GitHub Actions."
+        warn "Configura la clave original antes de instalar una versión actualizable. Véase docs/firma-original.md."
     fi
 fi
 
@@ -144,21 +141,18 @@ if [[ -n "$APK_SRC" && -s "$APK_SRC" ]]; then
     cp "$APK_SRC" "$APK_DEST"
     echo "     APK seleccionada: $APK_SRC"
     termux-open "$APK_DEST" 2>/dev/null || warn "Abre manualmente: $APK_DEST"
-    echo ""
+    echo
     echo "  ┌─────────────────────────────────────────────────┐"
     echo "  │  EN EL TELÉFONO:                                │"
     echo "  │   1. Toca 'Instalar'                            │"
-    echo "  │   2. Ajustes → Accesibilidad → CostPhone        │"
-    echo "  │      → Activar y confirmar                      │"
-    echo "  │   3. Abre CostPhone → Conexión → Doctor         │"
-    echo "  │      y ejecuta 'amctl doctor' en Termux         │"
+    echo "  │   2. Si Android lo pide, reactiva Accesibilidad │"
+    echo "  │   3. En Termux ejecuta: amctl doctor             │"
     echo "  └─────────────────────────────────────────────────┘"
 fi
 
-echo ""
+echo
 echo "══════════════════════════════════════════════════"
-echo "  PRUEBA DE CONEXIÓN: amctl doctor"
-echo "  Después: amctl snap"
-echo "  Si doctor no responde, revisa Accesibilidad y vuelve a instalar"
-echo "  la APK actual (no uses una APK heredada si buscas Shizuku)."
+echo "  Diagnóstico: amctl doctor"
+echo "  Snapshot: amctl snap"
+echo "  La APK no se abre como actualización sin validar la firma original."
 echo "══════════════════════════════════════════════════"
