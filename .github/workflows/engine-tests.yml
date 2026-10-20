@@ -42,6 +42,21 @@ jobs:
       - name: Offline unit tests
         run: python -m unittest discover -s engine -p 'test_*.py' -v
 
+      - name: Installer smoke test in an isolated HOME
+        run: |
+          set -euo pipefail
+          test_home="$(mktemp -d)"
+          trap 'rm -rf "$test_home"' EXIT
+          HOME="$test_home" COSTPHONE_ENGINE_BASE_URL="file://$GITHUB_WORKSPACE" bash termux/install-costphone-engine.sh
+          test -x "$test_home/bin/costphone-engine"
+          test -x "$test_home/bin/costphone-mcp"
+          test -f "$test_home/.config/opencode/skills/costphone-engine/SKILL.md"
+          test ! -e "$test_home/.config/opencode/opencode.json"
+          HOME="$test_home" bash "$test_home/bin/costphone-engine" --version
+          printf '%s\\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05"}}' \\
+            | HOME="$test_home" bash "$test_home/bin/costphone-mcp" > "$test_home/mcp.jsonl"
+          python -c 'import json,sys; r=json.loads(open(sys.argv[1], encoding="utf-8").readline()); assert r["result"]["serverInfo"]["name"] == "costphone-engine"' "$test_home/mcp.jsonl"
+
       - name: MCP stdio protocol smoke test
         run: |
           printf '%s\n' \
