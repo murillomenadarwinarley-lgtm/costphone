@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from windows_engine import EngineError, WindowsDesktopEngine, validate_app_name, validate_url  # noqa: E402
+from windows_engine import EngineError, WindowsDesktopEngine, validate_app_name, validate_control_selector, validate_url  # noqa: E402
 from windows_mcp_server import TOOLS, dispatch  # noqa: E402
 
 
@@ -42,6 +42,18 @@ class FakeAdapter:
     def press_key(self, key):
         self.calls.append(("press_key", key))
         return {"key": key, "pressed": True}
+
+    def list_controls(self, limit=100):
+        self.calls.append(("list_controls", limit))
+        return {"controls": [{"name": "Save", "automation_id": "saveButton", "control_type": "Button", "selector": {"name": "Save", "automation_id": "saveButton", "control_type": "Button", "occurrence": 0}}], "returned": 1, "visible_descendants": 1, "truncated": False}
+
+    def click_control(self, selector):
+        self.calls.append(("click_control", selector))
+        return {"clicked": True, "control": {"name": "Save", "control_type": "Button"}}
+
+    def set_control_text(self, selector, text):
+        self.calls.append(("set_control_text", selector, text))
+        return {"text_set": True, "characters": len(text), "control": {"name": "Search", "control_type": "Edit"}}
 
 
 class ValidationTests(unittest.TestCase):
@@ -106,9 +118,39 @@ class DesktopEngineTests(unittest.TestCase):
         self.assertEqual(contents[1]["mimeType"], "image/png")
         self.assertEqual(contents[1]["data"], "ZmFrZQ==")
 
+    def test_ui_automation_selector_requires_stable_identifier(self):
+        self.assertEqual(validate_control_selector({"name": "Save", "control_type": "Button"}), {"name": "Save", "control_type": "Button"})
+        with self.assertRaises(EngineError):
+            validate_control_selector({"control_type": "Button"})
+        with self.assertRaises(EngineError):
+            validate_control_selector({"name": "Save", "occurrence": True})
+
+    def test_controls_are_readable_without_input_permission(self):
+        adapter = FakeAdapter()
+        result = WindowsDesktopEngine(adapter, allow_input=False).list_controls()
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["controls"][0]["selector"]["automation_id"], "saveButton")
+        self.assertEqual(adapter.calls, [("list_controls", 100)])
+
+    def test_ui_control_click_requires_explicit_permission(self):
+        adapter = FakeAdapter()
+        with self.assertRaises(EngineError) as ctx:
+            WindowsDesktopEngine(adapter, allow_input=False).click_control({"name": "Save", "control_type": "Button"})
+        self.assertEqual(ctx.exception.code, "input_disabled")
+        self.assertEqual(adapter.calls, [])
+
+    def test_ui_control_operations_with_permission(self):
+        adapter = FakeAdapter()
+        engine = WindowsDesktopEngine(adapter, allow_input=True)
+        self.assertTrue(engine.click_control({"name": "Save", "control_type": "Button"})["ok"])
+        self.assertTrue(engine.set_control_text({"name": "Search", "control_type": "Edit"}, "café")["ok"])
+        self.assertEqual(adapter.calls[0][0], "click_control")
+        self.assertEqual(adapter.calls[1][0], "set_control_text")
+        self.assertEqual(adapter.calls[1][2], "café")
+
     def test_mcp_tools_and_unknown_tool(self):
         names = {tool["name"] for tool in TOOLS}
-        self.assertEqual(names, {"desktop_inspect", "desktop_screenshot", "desktop_launch_app", "desktop_open_url", "desktop_click", "desktop_type_text", "desktop_press_key"})
+        self.assertEqual(names, {"desktop_inspect", "desktop_screenshot", "desktop_launch_app", "desktop_open_url", "desktop_click", "desktop_type_text", "desktop_press_key", "desktop_inspect_controls", "desktop_click_control", "desktop_set_control_text"})
         response = dispatch("tools/call", {"name": "not_a_tool", "arguments": {}}, WindowsDesktopEngine(FakeAdapter()))
         self.assertEqual(response["error"]["code"], -32602)
 
