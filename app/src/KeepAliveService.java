@@ -5,10 +5,14 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
+import android.provider.Settings;
 import android.util.Log;
 
 /**
@@ -29,6 +33,24 @@ public class KeepAliveService extends Service {
     public static final String CHANNEL_ID = "costphone_remote_v2";
     private static final String OLD_CHANNEL_ID = "costphone_keep";
     public static final int NOTIF_ID = 1001;
+
+    // Una desvinculación puede ser transitoria: no retirar de inmediato el foreground service.
+    private static final long UNBIND_GRACE_MS = 15_000L;
+    private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
+    private static volatile Context appContext;
+    private static final Runnable STOP_IF_DISABLED = new Runnable() {
+        @Override public void run() {
+            Context ctx = appContext;
+            if (ctx == null) return;
+            if (isAccessibilityEnabled(ctx)) {
+                Log.w(TAG, "Accesibilidad sigue habilitada; se conserva keep-alive durante reconexión");
+                ConnectionLog.add("Keep-alive conservado: Accesibilidad sigue habilitada; esperando reconexión");
+                return;
+            }
+            ConnectionLog.add("Accesibilidad deshabilitada; se detiene keep-alive");
+            stop(ctx);
+        }
+    };
 
     @Override public void onCreate() {
         super.onCreate();
@@ -52,7 +74,10 @@ public class KeepAliveService extends Service {
             return START_STICKY;
         } catch (Throwable t) {
             Log.e(TAG, "keep-alive no disponible; CostPhone seguirá intentando operar", t);
-            try { ConnectionLog.add("Keep-alive no disponible: " + t.getClass().getSimpleName()); } catch (Throwable ignored) { }
+            try {
+                ConnectionLog.add("KEEPALIVE_START_FAILED type=" + t.getClass().getSimpleName()
+                        + " message=" + String.valueOf(t.getMessage()));
+            } catch (Throwable ignored) { }
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -129,18 +154,52 @@ public class KeepAliveService extends Service {
 
     @Override public IBinder onBind(Intent intent) { return null; }
 
-    /** Arranca el servicio en primer plano si no está ya activo. */
+    /** Arranca el servicio y cancela cualquier parada pendiente. */
     public static void start(Context ctx) {
+        if (ctx == null) return;
+        Context app = ctx.getApplicationContext();
+        appContext = app;
+        MAIN_HANDLER.removeCallbacks(STOP_IF_DISABLED);
         try {
-            Intent i = new Intent(ctx, KeepAliveService.class);
-            if (Build.VERSION.SDK_INT >= 26) {
-                ctx.startForegroundService(i);
-            } else {
-                ctx.startService(i);
+            Intent i = new Intent(app, KeepAliveService.class);
+            if (Build.VERSION.SDK_INT >= 26) app.startForegroundService(i);
+            else app.startService(i);
+        } catch (Throwable t) {
+            Log.e(TAG, "no se pudo arrancar el servicio en primer plano", t);
+            try {
+                ConnectionLog.add("KEEPALIVE_START_REJECTED type=" + t.getClass().getSimpleName()
+                        + " message=" + String.valueOf(t.getMessage()));
+            } catch (Throwable ignored) { }
+        }
+    }
+
+    /**
+     * Se llama desde onUnbind/onDestroy. Solo apagar el FGS si el usuario ha
+     * deshabilitado CostPhone en Accesibilidad; si aún está habilitado, dejar
+     * que Android vuelva a enlazar el AccessibilityService.
+     */
+    public static void stopIfAccessibilityDisabled(Context ctx) {
+        if (ctx == null) return;
+        appContext = ctx.getApplicationContext();
+        MAIN_HANDLER.removeCallbacks(STOP_IF_DISABLED);
+        MAIN_HANDLER.postDelayed(STOP_IF_DISABLED, UNBIND_GRACE_MS);
+        ConnectionLog.add("Accesibilidad se desvinculó; verificar antes de detener keep-alive");
+    }
+
+    private static boolean isAccessibilityEnabled(Context ctx) {
+        try {
+            String enabled = Settings.Secure.getString(ctx.getContentResolver(),
+                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+            if (enabled == null || enabled.trim().isEmpty()) return false;
+            ComponentName target = new ComponentName(ctx, AccessibilityServiceImpl.class);
+            for (String item : enabled.split(":")) {
+                if (target.equals(ComponentName.unflattenFromString(item))) return true;
             }
         } catch (Throwable t) {
-            Log.w(TAG, "no se pudo arrancar el servicio en primer plano: " + t);
+            Log.w(TAG, "no se pudo comprobar Accesibilidad; se conserva keep-alive", t);
+            return true;
         }
+        return false;
     }
 
     public static void stop(Context ctx) {
