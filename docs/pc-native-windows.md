@@ -8,9 +8,12 @@ Esta variante ejecuta **el motor y el servidor MCP directamente en Windows**. No
 - **desktop_screenshot:** captura real de la pantalla enviada al agente como imagen MCP.
 - **desktop_launch_app:** abre un ejecutable .exe concreto, sin shell ni argumentos.
 - **desktop_open_url:** abre una URL HTTP/HTTPS en el navegador predeterminado.
+- **desktop_inspect_controls:** lee los controles visibles que Windows UI Automation expone, con nombre, Automation ID, tipo, estado y rectángulo.
+- **desktop_click_control:** hace clic en un control seleccionado de forma exacta por los metadatos de Windows.
+- **desktop_set_control_text:** establece texto en controles de tipo Edit; exige permiso de entrada y bloquea campos identificados como contraseña.
 - **desktop_click, desktop_type_text, desktop_press_key:** control de ratón/teclado tras autorización explícita durante la instalación.
 
-La observación del contenido de una ventana se hace visualmente mediante la captura; esta primera versión no extrae automáticamente el árbol de accesibilidad ni OCR de Windows, y no intenta imitar las funciones de Android que dependen de amctl. La automatización requiere una sesión de Windows iniciada, desbloqueada y con escritorio visible; no es un servicio para ejecutar desde una sesión cerrada ni desde Windows Server sin escritorio.
+La versión usa Windows UI Automation cuando la aplicación expone controles accesibles y recurre a capturas visuales/coordenadas cuando no están disponibles. No todos los programas exponen el árbol completo; juegos, escritorios remotos y superficies dibujadas a medida pueden requerir interacción visual. Tampoco intenta imitar funciones exclusivas de Android que dependen de amctl. La automatización requiere una sesión de Windows iniciada, desbloqueada y con escritorio visible; no es un servicio para ejecutar desde una sesión cerrada ni desde Windows Server sin escritorio.
 
 ## Instalación
 
@@ -23,7 +26,7 @@ La observación del contenido de una ventana se hace visualmente mediante la cap
     Set-ExecutionPolicy -Scope Process Bypass -Force
     & $script
 
-El instalador descarga el motor, sus dependencias y el skill de uso a %LOCALAPPDATA%\CostPhonePC, crea un entorno virtual aislado, instala sus dependencias, instala el skill en %USERPROFILE%\.config\opencode\skills\costphone-pc y añade **costphone-pc** a %USERPROFILE%\.config\opencode\opencode.json. Si ya existe ese archivo, primero crea una copia de seguridad. Si encuentra opencode.jsonc, se detiene para no destruir comentarios ni editarlo de forma insegura.
+El instalador descarga el motor, sus dependencias (incluido Windows UI Automation) y el skill de uso a %LOCALAPPDATA%\CostPhonePC, crea o actualiza un entorno virtual aislado, instala sus dependencias, instala el skill en %USERPROFILE%\.config\opencode\skills\costphone-pc y añade **costphone-pc** a %USERPROFILE%\.config\opencode\opencode.json. Si ya existe ese archivo, primero crea una copia de seguridad. Si encuentra opencode.jsonc, se detiene para no destruir comentarios ni editarlo de forma insegura.
 
 Durante la instalación pregunta si autorizas a OpenCode a escribir y hacer clic en el PC. La respuesta predeterminada es **No**. Si escribes **SI**, la configuración añade el argumento --allow-input; puedes reinstalar para cambiar la decisión. Sin ese permiso, inspeccionar capturas, abrir aplicaciones y abrir URL sigue disponible, pero las herramientas de teclado/ratón responden con input_disabled.
 
@@ -33,7 +36,7 @@ Cierra y vuelve a abrir OpenCode. Ejecuta en una terminal:
 
     opencode mcp list
 
-Debe aparecer **costphone-pc**. Prueba primero desktop_inspect y desktop_screenshot. Después, pide abrir el Bloc de notas y escribir un texto de prueba si autorizaste el control de entrada. Al hacer clic, toma una captura reciente y usa solo coordenadas dentro de esa imagen; nunca repitas a ciegas una acción que parezca fallar.
+Debe aparecer **costphone-pc**. Prueba primero desktop_inspect y desktop_inspect_controls; luego desktop_screenshot. Después, pide abrir el Bloc de notas y escribir un texto de prueba si autorizaste el control de entrada. Al hacer clic, toma una captura reciente y usa solo coordenadas dentro de esa imagen; nunca repitas a ciegas una acción que parezca fallar.
 
 ## Configuración manual
 
