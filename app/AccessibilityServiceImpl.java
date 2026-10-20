@@ -88,9 +88,13 @@ public class AccessibilityServiceImpl extends AccessibilityService {
     // Cola interactiva corta: nunca dejar una larga fila de toques obsoletos.
     private final ThreadPoolExecutor commandExecutor = new ThreadPoolExecutor(
             1, 1, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(32));
-    // Árboles/capturas son caros; se aíslan para que no retrasen taps y escritura.
+    // Los árboles/capturas son caros; nunca compiten con las acciones.
     private final ThreadPoolExecutor diagnosticExecutor = new ThreadPoolExecutor(
             1, 1, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(4));
+    // La guardia consulta el paquete activo muchas veces. Aíslarla evita falsos
+    // bloqueos cuando una captura o un árbol lento ocupa la cola de diagnósticos.
+    private final ThreadPoolExecutor foregroundExecutor = new ThreadPoolExecutor(
+            1, 1, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(8));
     private static final int MAX_UI_TREE_LINES = 1200;
     private static final int MAX_UI_TREE_NODES = 5000;
     private static final int MAX_SEARCH_NODES = 3500;
@@ -175,8 +179,9 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                 final Intent command = new Intent(intent);
                 final long queuedAt = android.os.SystemClock.elapsedRealtime();
                 final String action = command.getAction();
-                final ThreadPoolExecutor targetExecutor = usesDiagnosticExecutor(action)
-                        ? diagnosticExecutor : commandExecutor;
+                final ThreadPoolExecutor targetExecutor = ACTION_GET_FOREGROUND_PACKAGE.equals(action)
+                        ? foregroundExecutor
+                        : (usesDiagnosticExecutor(action) ? diagnosticExecutor : commandExecutor);
                 try {
                     targetExecutor.execute(new Runnable() {
                         @Override
@@ -294,7 +299,6 @@ public class AccessibilityServiceImpl extends AccessibilityService {
     private boolean usesDiagnosticExecutor(String action) {
         return ACTION_GET_UI_TREE.equals(action)
                 || ACTION_SCREENDUMP.equals(action)
-                || ACTION_GET_FOREGROUND_PACKAGE.equals(action)
                 || ACTION_EXPORT_LOG.equals(action)
                 || ACTION_DISPLAY.equals(action);
     }
@@ -324,6 +328,7 @@ public class AccessibilityServiceImpl extends AccessibilityService {
         }
         commandExecutor.shutdownNow();
         diagnosticExecutor.shutdownNow();
+        foregroundExecutor.shutdownNow();
         // Shizuku tiene ciclo de vida propio; no desconectarlo al reparar Accesibilidad.
         super.onDestroy();
         KeepAliveService.stopIfAccessibilityDisabled(this);
