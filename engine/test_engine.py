@@ -91,6 +91,8 @@ class EngineValidationTests(unittest.TestCase):
     def test_sensitive_actions_are_detected(self):
         self.assertTrue(is_external_effect({"kind": "click_id", "value": "com.whatsapp:id/send"}))
         self.assertTrue(is_external_effect({"kind": "click_text", "value": "Delete account"}))
+        self.assertTrue(is_external_effect({"kind": "click_text", "value": "Enviar"}))
+        self.assertTrue(is_external_effect({"kind": "click_text", "value": "Eliminar"}))
         self.assertFalse(is_external_effect({"kind": "click_text", "value": "Settings"}))
 
     def test_sensitive_plan_is_blocked_before_any_device_read(self):
