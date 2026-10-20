@@ -85,10 +85,16 @@ public class AccessibilityServiceImpl extends AccessibilityService {
     static AccessibilityServiceImpl sInstance;
     int screenW, screenH;
     BroadcastReceiver receiver;
-    // Cola serial acotada: evita acumular órdenes ilimitadas si el servicio se atasca.
+    // Cola interactiva corta: nunca dejar una larga fila de toques obsoletos.
     private final ThreadPoolExecutor commandExecutor = new ThreadPoolExecutor(
-            1, 1, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(32));
-    private static final int MAX_UI_TREE_LINES = 1200;
+            1, 1, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(12));
+    // Árboles/capturas son caros; se aíslan para que no retrasen taps y escritura.
+    private final ThreadPoolExecutor diagnosticExecutor = new ThreadPoolExecutor(
+            1, 1, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<Runnable>(2));
+    private static final int MAX_UI_TREE_LINES = 800;
+    private static final int MAX_UI_TREE_NODES = 5000;
+    private static final int MAX_SEARCH_NODES = 3500;
+    private static final int MAX_SEARCH_DEPTH = 32;
     // Shared secret – set via build-time constant or default. amctl must send it.
     static final String SECRET = "termux-accessdroid-2025";
     // Screenshot callback state
@@ -168,8 +174,11 @@ public class AccessibilityServiceImpl extends AccessibilityService {
             public void onReceive(Context context, Intent intent) {
                 final Intent command = new Intent(intent);
                 final long queuedAt = android.os.SystemClock.elapsedRealtime();
+                final String action = command.getAction();
+                final ThreadPoolExecutor targetExecutor = usesDiagnosticExecutor(action)
+                        ? diagnosticExecutor : commandExecutor;
                 try {
-                    commandExecutor.execute(new Runnable() {
+                    targetExecutor.execute(new Runnable() {
                         @Override
                         public void run() {
                             final long startedAt = android.os.SystemClock.elapsedRealtime();
@@ -177,6 +186,12 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                             if (queueWait >= 300L) {
                                 ConnectionLog.add("PERF command=" + command.getAction()
                                         + " queue_wait_ms=" + queueWait);
+                            }
+                            // No ejecutar taps/texto después de quedar obsoletos: se sienten como lag.
+                            if (!usesDiagnosticExecutor(command.getAction()) && queueWait >= 1000L) {
+                                ConnectionLog.add("PERF command=" + command.getAction()
+                                        + " outcome=stale_dropped queue_wait_ms=" + queueWait);
+                                return;
                             }
                             try {
                                 handleCommand(command);
@@ -195,7 +210,7 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                     });
                 } catch (RejectedExecutionException e) {
                     ConnectionLog.add("QUEUE busy: comando rechazado " + intent.getAction());
-                    Log.w(TAG, "Comando rechazado: cola llena o servicio cerrándose", e);
+                    Log.w(TAG, "Comando rechazado: cola acotada llena o servicio cerrándose", e);
                 }
             }
         };
@@ -281,6 +296,16 @@ public class AccessibilityServiceImpl extends AccessibilityService {
         Log.i(TAG, "AccessibilityService connected – ready");
     }
 
+    /** Aísla los comandos cuyo coste depende del tamaño de la pantalla o del almacenamiento. */
+    private boolean usesDiagnosticExecutor(String action) {
+        return ACTION_GET_UI_TREE.equals(action)
+                || ACTION_SCREENDUMP.equals(action)
+                || ACTION_GET_FOREGROUND_PACKAGE.equals(action)
+                || ACTION_EXPORT_LOG.equals(action)
+                || ACTION_DISPLAY.equals(action)
+                || ACTION_DISPLAY_BACK.equals(action);
+    }
+
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) { }
 
@@ -305,6 +330,7 @@ public class AccessibilityServiceImpl extends AccessibilityService {
             try { unregisterReceiver(receiver); } catch (Exception e) { }
         }
         commandExecutor.shutdownNow();
+        diagnosticExecutor.shutdownNow();
         // Shizuku tiene ciclo de vida propio; no desconectarlo al reparar Accesibilidad.
         super.onDestroy();
         KeepAliveService.stopIfAccessibilityDisabled(this);
@@ -508,7 +534,7 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                 int displayId = intent.getIntExtra("displayId", android.view.Display.DEFAULT_DISPLAY);
                 if (Build.VERSION.SDK_INT >= 33) {
                     try {
-                    takeScreenshot(displayId, commandExecutor,
+                    takeScreenshot(displayId, diagnosticExecutor,
                         new TakeScreenshotCallback() {
                             @Override
                             public void onSuccess(ScreenshotResult r) {
@@ -810,7 +836,10 @@ public class AccessibilityServiceImpl extends AccessibilityService {
     }
 
     private void runShellOrFallback(int displayId, String action, Runnable fallback, Object... args) {
-        if (!ShizukuManager.runShellAsync(displayId, action, fallback, args)) fallback.run();
+        // Los gestos y teclas van por la API local de Accesibilidad, sin esperar
+        // un Binder/shell de Shizuku que puede quedar colgado. Shizuku sigue
+        // disponible para operaciones de shell explícitas y funciones avanzadas.
+        if (fallback != null) fallback.run();
     }
 
     /* -------------------------------------------------------------- */
@@ -939,13 +968,17 @@ public class AccessibilityServiceImpl extends AccessibilityService {
     }
 
     private AccessibilityNodeInfo findEditableFocus(AccessibilityNodeInfo node, int depth) {
-        if (node == null || depth > 15) return null;
+        return findEditableFocus(node, depth, new int[]{0});
+    }
+
+    private AccessibilityNodeInfo findEditableFocus(AccessibilityNodeInfo node, int depth, int[] visited) {
+        if (node == null || depth > 15 || visited[0]++ >= MAX_SEARCH_NODES) return null;
         if (node.isFocused() && node.isEditable()) return AccessibilityNodeInfo.obtain(node);
-        for (int i = 0; i < node.getChildCount(); i++) {
+        for (int i = 0; i < node.getChildCount() && visited[0] < MAX_SEARCH_NODES; i++) {
             AccessibilityNodeInfo child = node.getChild(i);
             if (child == null) continue;
             AccessibilityNodeInfo found = null;
-            try { found = findEditableFocus(child, depth + 1); }
+            try { found = findEditableFocus(child, depth + 1, visited); }
             finally { try { child.recycle(); } catch (Throwable ignored) { } }
             if (found != null) return found;
         }
@@ -953,7 +986,11 @@ public class AccessibilityServiceImpl extends AccessibilityService {
     }
 
     private AccessibilityNodeInfo findBackNode(AccessibilityNodeInfo node, int depth) {
-        if (node == null || depth > 10) return null;
+        return findBackNode(node, depth, new int[]{0});
+    }
+
+    private AccessibilityNodeInfo findBackNode(AccessibilityNodeInfo node, int depth, int[] visited) {
+        if (node == null || depth > 10 || visited[0]++ >= MAX_SEARCH_NODES) return null;
         if (node.isClickable() || node.isVisibleToUser()) {
             CharSequence cs = node.getText();
             CharSequence cd = node.getContentDescription();
@@ -963,11 +1000,11 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                 if (node.isClickable()) return AccessibilityNodeInfo.obtain(node);
             }
         }
-        for (int i = 0; i < node.getChildCount(); i++) {
+        for (int i = 0; i < node.getChildCount() && visited[0] < MAX_SEARCH_NODES; i++) {
             AccessibilityNodeInfo child = node.getChild(i);
             if (child == null) continue;
             AccessibilityNodeInfo found = null;
-            try { found = findBackNode(child, depth + 1); }
+            try { found = findBackNode(child, depth + 1, visited); }
             finally { try { child.recycle(); } catch (Throwable ignored) { } }
             if (found != null) return found;
         }
@@ -1198,12 +1235,13 @@ public class AccessibilityServiceImpl extends AccessibilityService {
         if (root == null) return;
         final Rect mainRect = new Rect();
         final String mainPkg;
+        final int[] visitedNodes = new int[]{0};
         try {
             root.getBoundsInScreen(mainRect);
             mainPkg = String.valueOf(root.getPackageName());
             out.add("# display=" + displayId);
             out.add("# pkg=" + mainPkg);
-            dumpNode(root, out, 0, 25);
+            dumpNode(root, out, 0, 25, visitedNodes);
         } finally { try { root.recycle(); } catch (Throwable ignored) { } }
 
         List<AccessibilityWindowInfo> wins = windowsOf(displayId);
@@ -1223,7 +1261,7 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                     String kind = windowTag(aw.getType());
                     if (kind == null) continue;
                     out.add("# win=" + kind + " pkg=" + wpkg);
-                    dumpNode(wroot, out, 0, 25);
+                    dumpNode(wroot, out, 0, 25, visitedNodes);
                 } finally { try { wroot.recycle(); } catch (Throwable ignored) { } }
             }
         } finally { recycleWindows(wins); }
@@ -1272,24 +1310,32 @@ public class AccessibilityServiceImpl extends AccessibilityService {
     }
 
     private AccessibilityNodeInfo findByText(AccessibilityNodeInfo node, String text) {
-        if (node == null) return null;
+        return findByText(node, text, 0, new int[]{0});
+    }
+
+    private AccessibilityNodeInfo findByText(AccessibilityNodeInfo node, String text, int depth, int[] visited) {
+        if (node == null || text == null || depth > MAX_SEARCH_DEPTH
+                || visited[0]++ >= MAX_SEARCH_NODES) return null;
         CharSequence cs = node.getText();
         CharSequence desc = node.getContentDescription();
         if ((cs != null && cs.toString().contains(text))
                 || (desc != null && desc.toString().contains(text))) return AccessibilityNodeInfo.obtain(node);
-        for (int i = 0; i < node.getChildCount(); i++) {
+        for (int i = 0; i < node.getChildCount() && visited[0] < MAX_SEARCH_NODES; i++) {
             AccessibilityNodeInfo child = node.getChild(i);
             if (child == null) continue;
             AccessibilityNodeInfo found = null;
-            try { found = findByText(child, text); }
+            try { found = findByText(child, text, depth + 1, visited); }
             finally { try { child.recycle(); } catch (Throwable ignored) { } }
             if (found != null) return found;
         }
         return null;
     }
 
-    private void dumpNode(AccessibilityNodeInfo node, List<String> out, int depth, int maxDepth) {
-        if (depth > maxDepth || node == null || out.size() >= MAX_UI_TREE_LINES) return;
+    private void dumpNode(AccessibilityNodeInfo node, List<String> out, int depth,
+                          int maxDepth, int[] visitedNodes) {
+        if (depth > maxDepth || node == null || out.size() >= MAX_UI_TREE_LINES
+                || visitedNodes[0] >= MAX_UI_TREE_NODES) return;
+        visitedNodes[0]++;
         Rect r = new Rect();
         node.getBoundsInScreen(r);
         CharSequence txt = node.getText();
@@ -1314,10 +1360,11 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                 indent, shortClass, vid, r,
                 txt == null ? "" : txt, desc == null ? "" : desc, flags));
         }
-        for (int i = 0; i < cc && out.size() < MAX_UI_TREE_LINES; i++) {
+        for (int i = 0; i < cc && out.size() < MAX_UI_TREE_LINES
+                && visitedNodes[0] < MAX_UI_TREE_NODES; i++) {
             AccessibilityNodeInfo child = node.getChild(i);
             if (child == null) continue;
-            try { dumpNode(child, out, depth + 1, maxDepth); }
+            try { dumpNode(child, out, depth + 1, maxDepth, visitedNodes); }
             finally { try { child.recycle(); } catch (Throwable ignored) { } }
         }
     }
