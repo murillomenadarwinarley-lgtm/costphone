@@ -115,3 +115,22 @@ jobs:
           assert names == expected, names
           print("Native Windows MCP handshake and tool listing passed.")
           PY
+  windows-native-package-check:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install native Windows dependencies
+        run: python -m pip install --disable-pip-version-check -r engine/requirements-windows.txt
+
+      - name: Compile and import Windows engine dependencies
+        run: |
+          python -m py_compile engine/windows_engine.py engine/windows_mcp_server.py engine/test_windows_engine.py
+          python -c "import pyautogui, PIL, pyperclip, pywinauto; print('Windows automation dependencies imported successfully.')"
+
