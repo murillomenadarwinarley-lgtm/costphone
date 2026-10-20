@@ -848,6 +848,20 @@ cmd_find() {
     return 0
 }
 
+wait_foreground_package() {
+    local expected="${1:-}" actual="" attempt
+    [[ -n "$expected" ]] || return 2
+    # 'am start' solo confirma que Android aceptó el Intent. Esperar al foco real
+    # evita que el agente haga waittext/snap sobre el launcher y pierda 8-10 s.
+    for ((attempt=0; attempt<20; attempt++)); do
+        actual="$(fg_pkg 2>/dev/null)" || actual=""
+        [[ "$actual" == "$expected" ]] && return 0
+        sleep 0.1
+    done
+    echo "amctl launch: Android aceptó abrir '$expected', pero no llegó al primer plano (actual: ${actual:-desconocida})." >&2
+    return 1
+}
+
 cmd_launch() {
     if [[ "$DISPLAY_ID" != "0" ]]; then
         # lanzar en la pantalla virtual lo hace la propia app (ActivityOptions.setLaunchDisplayId);
@@ -863,8 +877,11 @@ cmd_launch() {
         if [[ "$sp" =~ $AMCTL_PKG_RE ]]; then
             amctl_log launch "am start -p $sp (sesión)"
             if sh_exec "$AMCTL_MARKER_WAIT" am start --user 0 -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p "$sp"; then
-                echo "Launched $sp (sesión rish)"
-                return 0
+                if wait_foreground_package "$sp"; then
+                    echo "Launched $sp (sesión rish; primer plano confirmado)"
+                    return 0
+                fi
+                return 1
             fi
             echo "aviso: 'am start' por sesión falló — uso la vía clásica" >&2
         fi
@@ -878,27 +895,28 @@ cmd_launch() {
             | sed 's/^[^:]*: //' | head -1)
         if [[ -n "$comp" ]]; then
             tam start --user 0 -n "$comp" 2>/dev/null || { echo "launch failed for $pkg"; return 1; }
-            echo "Launched $pkg -> $comp"
         else
             tam monkey -p "$pkg" -c android.intent.category.LAUNCHER 1 2>/dev/null \
-                && echo "Launched $pkg (monkey)" || { echo "launch failed for $pkg"; return 1; }
+                || { echo "launch failed for $pkg"; return 1; }
         fi
+        wait_foreground_package "$pkg" || return $?
+        echo "Launched $pkg (primer plano confirmado)"
     else
         local pkg="${1:-}"
         if [[ "$pkg" != *.* ]]; then
             echo "uso: amctl launch <package.name>   (sin socket no hay busqueda por nombre)" >&2
             return 2
         fi
-        if tam start --user 0 -a android.intent.action.MAIN \
+        if ! tam start --user 0 -a android.intent.action.MAIN \
             -c android.intent.category.LAUNCHER -p "$pkg" >/dev/null 2>&1; then
-            echo "Launched $pkg"
-        elif bc com.accessdroid.termux.ACTION_START_ACTIVITY --es package "$pkg"; then
-            echo "Launched $pkg (via AccessDroid)"
-        else
-            echo "launch failed for $pkg" >&2
-            echo "(sin socket hay limite de visibilidad de paquetes: prueba el componente explicito: am start -n $pkg/.ActividadPrincipal)" >&2
-            return 1
+            if ! bc com.accessdroid.termux.ACTION_START_ACTIVITY --es package "$pkg"; then
+                echo "launch failed for $pkg" >&2
+                echo "(sin socket hay limite de visibilidad de paquetes: prueba el componente explícito correspondiente a $pkg)" >&2
+                return 1
+            fi
         fi
+        wait_foreground_package "$pkg" || return $? 
+        echo "Launched $pkg (primer plano confirmado)"
     fi
 }
 
