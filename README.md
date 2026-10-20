@@ -235,3 +235,5 @@ Los íconos se regeneran del logo con `python3 gen-icons.py`
 - Los toques y teclas usan la API nativa de Accesibilidad en el teléfono; Shizuku se conserva para operaciones avanzadas, pero un IPC lento no retiene la cola de gestos.
 - Capturas, volcados del árbol y diagnósticos se aíslan de los comandos interactivos. Las búsquedas y el árbol tienen límites de nodos para evitar explorar jerarquías enormes indefinidamente.
 - La aplicación no escribe en `ENABLED_ACCESSIBILITY_SERVICES` ni puede reactivar el permiso por su cuenta. Si Android lo deshabilita durante una instalación/actualización, vuelve a activarlo manualmente en Ajustes → Accesibilidad → CostPhone; no borres los datos de la app.
+
+- **Restauración de funcionalidad (1.6.9)** → Shizuku vuelve a ser el backend preferido para toques/teclas cuando ya está conectado; Accesibilidad queda como fallback inmediato. No se eliminan ni se reescriben preferencias de accesibilidad.
