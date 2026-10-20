@@ -83,11 +83,16 @@ public final class ShizukuManager {
             shell = ICostPhoneShell.Stub.asInterface(service);
             binding = false;
             Log.i(TAG, "Shizuku: UserService conectado");
+            ConnectionLog.add("Shizuku: UserService conectado");
+            notifyStateChanged(state());
         }
 
         @Override public void onServiceDisconnected(ComponentName name) {
             shell = null;
+            binding = false;
             Log.w(TAG, "Shizuku: UserService desconectado");
+            ConnectionLog.add("Shizuku: UserService desconectado");
+            notifyStateChanged(state());
         }
     };
 
@@ -151,14 +156,16 @@ public final class ShizukuManager {
         if (sInstance == null) {
             sInstance = new ShizukuManager();
             try {
-                // Sticky: si el binder ya llegó, dispara el listener al momento.
                 Shizuku.addBinderReceivedListenerSticky(sInstance.receivedListener);
                 Shizuku.addBinderDeadListener(sInstance.deadListener);
             } catch (Throwable t) {
                 Log.w(TAG, "no se pudieron registrar los listeners: " + t);
+                ConnectionLog.add("Shizuku: no se pudo registrar el listener: " + t.getClass().getSimpleName());
             }
         }
-        return sInstance;
+        ShizukuManager manager = sInstance;
+        if (manager != null && state() == READY) manager.ensureBound();
+        return manager;
     }
 
     /** El gestor ya creado, o null. Para soltar recursos sin crearlo. */
@@ -187,9 +194,11 @@ public final class ShizukuManager {
     /** Pide el permiso de Shizuku. El resultado llega al listener del panel. */
     public static boolean requestPermission(int requestCode) {
         try {
-            if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) return true;
-            // Acusamos recibo, para que si Shizuku arranca más tarde y sigue sin
-            // permiso se lo pidamos de nuevo en vez de quedarnos en ámbar.
+            if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
+                ShizukuManager manager = get();
+                if (manager != null) manager.ensureBound();
+                return true;
+            }
             wantsPermission = true;
             Shizuku.requestPermission(requestCode);
             ConnectionLog.add("Shizuku: permiso pedido");
@@ -199,6 +208,21 @@ public final class ShizukuManager {
             Log.w(TAG, "requestPermission: " + t);
             return false;
         }
+    }
+
+    public static boolean isShellConnected() {
+        ShizukuManager manager = peek();
+        return manager != null && manager.shell != null;
+    }
+
+    public static boolean isShellBinding() {
+        ShizukuManager manager = peek();
+        return manager != null && manager.binding;
+    }
+
+    public static void connectNow() {
+        ShizukuManager manager = get();
+        if (manager != null) manager.ensureBound();
     }
 
     /**
@@ -325,6 +349,11 @@ public final class ShizukuManager {
                         + "ms) en '" + action + "', usando accesibilidad");
                 return false;
             }
+            String value = result[0];
+            if (value == null || value.trim().startsWith("error:")) {
+                ConnectionLog.add("Shizuku: el comando '" + action + "' falló; se usará accesibilidad");
+                return false;
+            }
             return true;
         } catch (Throwable t) {
             ConnectionLog.add("Shizuku: no se pudo encolar '" + action + "'");
@@ -340,21 +369,19 @@ public final class ShizukuManager {
 
     private void ensureBound() {
         if (shell != null) return;
-        if (state() != READY) return;
+        if (state() != READY) { binding = false; return; }
         long now = android.os.SystemClock.elapsedRealtime();
-        // Si el enlace se quedara colgado (el servidor devuelve false y nunca
-        // llama a onServiceConnected), reintentamos pasado un rato en vez de
-        // quedarnos sin shell para siempre.
         if (binding && now - bindStartedAt < BIND_RETRY_MS) return;
         try {
             binding = true;
             bindStartedAt = now;
-            // daemon(false): el proceso del shell muere con CostPhone, así que
-            // no dejamos procesos root huérfanos por el móvil.
+            ConnectionLog.add("Shizuku: enlazando UserService");
             Shizuku.bindUserService(args, conn);
         } catch (Throwable t) {
             binding = false;
+            ConnectionLog.add("Shizuku: bindUserService falló: " + t.getClass().getSimpleName());
             Log.w(TAG, "bindUserService falló: " + t);
+            notifyStateChanged(state());
         }
     }
 

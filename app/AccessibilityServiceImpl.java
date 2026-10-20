@@ -89,7 +89,7 @@ public class AccessibilityServiceImpl extends AccessibilityService {
     interface ScreenshotCB { void onResult(android.graphics.Bitmap bmp); }
     ScreenshotCB pendingCb = null;
 
-    public boolean isConnected() { return sInstance != null; }
+    public boolean isConnected() { return sInstance == this && receiver != null; }
 
     public void captureBitmap(final ScreenshotCB cb) {
         if (Build.VERSION.SDK_INT < 33) { if (cb != null) cb.onResult(null); return; }
@@ -151,7 +151,6 @@ public class AccessibilityServiceImpl extends AccessibilityService {
     @Override
     public void onServiceConnected() {
         super.onServiceConnected();
-        sInstance = this;
         DisplayMetrics dm = getResources().getDisplayMetrics();
         screenW = dm.widthPixels;
         screenH = dm.heightPixels;
@@ -203,42 +202,43 @@ public class AccessibilityServiceImpl extends AccessibilityService {
             }
         } catch (Throwable t) {
             Log.e(TAG, "No se pudo registrar el receptor de comandos", t);
+            receiver = null;
             sInstance = null;
             return;
         }
+        sInstance = this;
         // Cargar configuración persistente de pantallas virtuales desde
         // Settings.Global overlay_display_devices. Si hay valor guardado,
         // aplicarlo como si el usuario hubiera ejecutado "on" desde amctl.
-        String savedOverlay = android.provider.Settings.Global.getString(
-                getContentResolver(), SETTING_OVERLAY_DISPLAYS);
-        if (savedOverlay != null && !savedOverlay.isEmpty()) {
-            // Simular el manejador de "on": ancho x alto / dpi [,flags]
-            // Formato AOSP: "w x h / dpi[,flag1][,flag2];[display2];..."
-            String[] slashParts = savedOverlay.split("/", 2);
-            if (slashParts.length == 2) {
-                String dims = slashParts[0];
-                String[] dp = dims.split("x");
-                if (dp.length == 2) {
-                    int w = Integer.parseInt(dp[0]);
-                    int h = Integer.parseInt(dp[1]);
-                    // Separar dpi de posibles flags (ej: "320,own_content_only")
-                    String[] dpiParts = slashParts[1].split(",", 2);
-                    int dpi = Integer.parseInt(dpiParts[0]);
-                    // Aplicar configuración guardada (flags se manejan por defecto)
-                    applySavedOverlayDisplay(w, h, dpi);
+        try {
+            String savedOverlay = android.provider.Settings.Global.getString(
+                    getContentResolver(), SETTING_OVERLAY_DISPLAYS);
+            if (savedOverlay != null && !savedOverlay.trim().isEmpty()) {
+                String[] slashParts = savedOverlay.split("/", 2);
+                if (slashParts.length == 2) {
+                    String[] dimensions = slashParts[0].trim().split("x");
+                    String[] dpiAndFlags = slashParts[1].trim().split(",", 2);
+                    if (dimensions.length == 2 && dpiAndFlags.length >= 1) {
+                        int width = Integer.parseInt(dimensions[0].trim());
+                        int height = Integer.parseInt(dimensions[1].trim());
+                        int dpi = Integer.parseInt(dpiAndFlags[0].trim());
+                        if (width > 0 && height > 0 && dpi > 0) {
+                            applySavedOverlayDisplay(width, height, dpi);
+                        }
+                    }
                 }
             }
+        } catch (Throwable t) {
+            Log.w(TAG, "Configuración de pantalla virtual inválida; se ignora", t);
+            try { ConnectionLog.add("Pantalla virtual: configuración inválida; ignorada"); } catch (Throwable ignored) { }
         }
         // Calienta Shizuku: si ya tiene permiso, deja el UserService enlazado
         // para que el primer comando vaya por shell y no por el arranque lento
         // de accessibility. Si no está, no pasa nada.
         ShizukuManager.get();
-        // Servicio en primer plano: una notificación persistente es el precio
-        // para que Android no mate el proceso y con él el servicio de
-        // accesibilidad.
-        KeepAliveService.start(this);
         ConnectionLog.init(this);
-        ConnectionLog.add("Servicio de accesibilidad conectado");
+        ConnectionLog.add("Servicio de accesibilidad conectado y receptor listo");
+        KeepAliveService.start(this);
         Log.i(TAG, "AccessibilityService connected – ready");
     }
 
@@ -250,8 +250,13 @@ public class AccessibilityServiceImpl extends AccessibilityService {
 
     @Override
     public boolean onUnbind(android.content.Intent intent) {
-        sInstance = null;
-        ConnectionLog.add("Servicio de accesibilidad desvinculado");
+        if (sInstance == this) sInstance = null;
+        if (receiver != null) {
+            try { unregisterReceiver(receiver); } catch (Throwable ignored) { }
+            receiver = null;
+        }
+        try { KeepAliveService.stop(this); } catch (Throwable ignored) { }
+        try { ConnectionLog.add("Servicio de accesibilidad desvinculado"); } catch (Throwable ignored) { }
         return super.onUnbind(intent);
     }
 
@@ -261,8 +266,7 @@ public class AccessibilityServiceImpl extends AccessibilityService {
         if (receiver != null) {
             try { unregisterReceiver(receiver); } catch (Exception e) { }
         }
-        // No dejamos el UserService (ni su hilo) colgando.
-        ShizukuManager.release();
+        // Shizuku tiene ciclo de vida propio; no desconectarlo al reparar Accesibilidad.
         KeepAliveService.stop(this);
         ConnectionLog.add("Servicio de accesibilidad desconectado");
         sInstance = null;
@@ -413,7 +417,7 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                         try { root.recycle(); } catch (Throwable ignored) { }
                     }
                 }
-                String response = "# pkg=" + packageName + "\\n";
+                String response = "# pkg=" + packageName + "\n";
                 try {
                     saveToDownloads("accessdroid-foreground.txt", "text/plain",
                             response.getBytes("UTF-8"));

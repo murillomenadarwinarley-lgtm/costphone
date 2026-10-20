@@ -21,6 +21,7 @@ jobs:
       - name: Validate automation scripts
         run: |
           bash -n termux/amctl
+          bash -n termux/update-costphone.sh
           python3 -m py_compile termux/amctl-snap.py
 
       - name: Set up JDK 17 (Temurin)

@@ -46,9 +46,16 @@ public class KeepAliveService extends Service {
             stopSelf();
             return START_NOT_STICKY;
         }
-        startForeground(NOTIF_ID, n);
-        ConnectionLog.add("Notificación persistente activa");
-        return START_STICKY;
+        try {
+            startForeground(NOTIF_ID, n);
+            ConnectionLog.add("Notificación persistente activa");
+            return START_STICKY;
+        } catch (Throwable t) {
+            Log.e(TAG, "keep-alive no disponible; CostPhone seguirá intentando operar", t);
+            try { ConnectionLog.add("Keep-alive no disponible: " + t.getClass().getSimpleName()); } catch (Throwable ignored) { }
+            stopSelf();
+            return START_NOT_STICKY;
+        }
     }
 
     private void createChannel() {

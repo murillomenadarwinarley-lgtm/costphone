@@ -98,7 +98,10 @@ public class SettingsActivity extends Activity {
     private final rikka.shizuku.Shizuku.OnRequestPermissionResultListener shizukuPermListener =
             new rikka.shizuku.Shizuku.OnRequestPermissionResultListener() {
                 @Override public void onRequestPermissionResult(int requestCode, int grantResult) {
-                    if (requestCode == REQ_SHIZUKU_PERMISSION) refreshShizuku();
+                    if (requestCode == REQ_SHIZUKU_PERMISSION) {
+                        if (grantResult == PackageManager.PERMISSION_GRANTED) ShizukuManager.connectNow();
+                        refreshShizuku();
+                    }
                 }
             };
 
@@ -112,6 +115,7 @@ public class SettingsActivity extends Activity {
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        ShizukuManager.get();
 
         // Cargar tokens de colors.xml
         BG_DARK      = Ui.color(this, "bg");
@@ -262,6 +266,7 @@ public class SettingsActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
+        ShizukuManager.get();
         requestNotificationPermission();
         requestLegacyStoragePermission();
         refreshStatus();
@@ -2038,40 +2043,67 @@ public class SettingsActivity extends Activity {
     }
 
     private void refreshShizuku() {
-        if (shizukuDot == null) return;
-        switch (ShizukuManager.state()) {
-            case ShizukuManager.READY:
-                shizukuDot.setBackground(rounded(ACCENT_GREEN, STATUS_RADIUS, 0));
-                tvShizuku.setText("Shizuku activo");
-                tvShizuku.setTextColor(ACCENT_GREEN);
-                btnShizuku.setVisibility(View.GONE);
-                break;
-            case ShizukuManager.NO_PERMISSION:
-                shizukuDot.setBackground(rounded(ACCENT_AMBER, STATUS_RADIUS, 0));
-                tvShizuku.setText("Falta permiso");
-                tvShizuku.setTextColor(ACCENT_AMBER);
-                btnShizuku.setVisibility(View.VISIBLE);
-                btnShizuku.setText("Pedir permiso");
-                btnShizuku.setOnClickListener(new View.OnClickListener() {
-                    @Override public void onClick(View v) {
-                        ShizukuManager.requestPermission(REQ_SHIZUKU_PERMISSION);
-                    }
-                });
-                break;
-            default:
-                shizukuDot.setBackground(rounded(TEXT_MUTED, STATUS_RADIUS, 0));
-                tvShizuku.setText("No disponible");
-                tvShizuku.setTextColor(TEXT_DIM);
-                btnShizuku.setVisibility(View.VISIBLE);
-                btnShizuku.setText("Cómo instalar");
-                btnShizuku.setOnClickListener(new View.OnClickListener() {
-                    @Override public void onClick(View v) {
-                        startActivity(new Intent(Intent.ACTION_VIEW,
-                                Uri.parse("https://shizuku.rikka.app/download/")));
-                    }
-                });
-                break;
+        if (shizukuDot == null || tvShizuku == null || btnShizuku == null) return;
+        int state = ShizukuManager.state();
+        if (state == ShizukuManager.UNAVAILABLE) {
+            shizukuDot.setBackground(rounded(ACCENT_RED, STATUS_RADIUS, 0));
+            tvShizuku.setText("Shizuku no iniciado");
+            tvShizuku.setTextColor(ACCENT_RED);
+            btnShizuku.setVisibility(View.VISIBLE);
+            btnShizuku.setText("Abrir Shizuku");
+            btnShizuku.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    try {
+                        Intent launch = getPackageManager().getLaunchIntentForPackage("moe.shizuku.privileged.api");
+                        if (launch != null) {
+                            startActivity(launch);
+                            toast("Inicia el servicio en Shizuku y vuelve a CostPhone.");
+                        } else {
+                            startActivity(new Intent(Intent.ACTION_VIEW,
+                                    Uri.parse("https://shizuku.rikka.app/download/")));
+                        }
+                    } catch (Throwable t) { toast("No se pudo abrir Shizuku."); }
+                }
+            });
+            return;
         }
+        if (state == ShizukuManager.NO_PERMISSION) {
+            shizukuDot.setBackground(rounded(ACCENT_AMBER, STATUS_RADIUS, 0));
+            tvShizuku.setText("Falta permiso de CostPhone");
+            tvShizuku.setTextColor(ACCENT_AMBER);
+            btnShizuku.setVisibility(View.VISIBLE);
+            btnShizuku.setText("Conceder permiso");
+            btnShizuku.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    if (!ShizukuManager.requestPermission(REQ_SHIZUKU_PERMISSION)) {
+                        toast("Shizuku no respondió. Comprueba que su servicio esté iniciado.");
+                    }
+                    refreshShizuku();
+                }
+            });
+            return;
+        }
+        if (ShizukuManager.isShellConnected()) {
+            shizukuDot.setBackground(rounded(ACCENT_GREEN, STATUS_RADIUS, 0));
+            tvShizuku.setText("Shizuku · Shell conectado");
+            tvShizuku.setTextColor(ACCENT_GREEN);
+            btnShizuku.setVisibility(View.GONE);
+            return;
+        }
+        ShizukuManager.connectNow();
+        shizukuDot.setBackground(rounded(ACCENT_AMBER, STATUS_RADIUS, 0));
+        tvShizuku.setText(ShizukuManager.isShellBinding()
+                ? "Enlazando UserService…" : "Permiso listo · sin enlace");
+        tvShizuku.setTextColor(ACCENT_AMBER);
+        btnShizuku.setVisibility(View.VISIBLE);
+        btnShizuku.setText("Reintentar conexión");
+        btnShizuku.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                ShizukuManager.connectNow();
+                refreshShizuku();
+                toast("Reintentando enlace. Shizuku debe tener su servicio iniciado.");
+            }
+        });
     }
 
     // ═══════════════════════════════════════════════════════════════

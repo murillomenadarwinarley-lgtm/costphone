@@ -448,10 +448,7 @@ scale_guard() {
 #   without one     -> fresh ACTION_GET_UI_TREE broadcast, first line '# pkg='
 #   (the classic 'am' cannot run dumpsys, so the tree is the fallback)
 fg_pkg() {
-    local out
-    # con -d N 'dumpsys window' habla del display 0, así que no sirve: el árbol de
-    # ese display es la única fuente (y si no tiene ventanas propias, no hay
-    # '# pkg=' -> desconocido -> el modo seguro lo niega)
+    local out f=/sdcard/Download/accessdroid-foreground.txt line
     if session_alive && [[ "$DISPLAY_ID" == "0" ]]; then
         session_raw "dumpsys window 2>/dev/null | grep -m1 -E 'mCurrentFocus|mFocusedApp' | grep -m1 -oE '[a-zA-Z0-9_]+[.][a-zA-Z0-9_.]+/[a-zA-Z0-9_.]+'" || :
         out="$SESSION_OUT"
@@ -460,7 +457,7 @@ fg_pkg() {
             return 0
         fi
     fi
-    local f=/sdcard/Download/accessdroid-foreground.txt line
+    # Preguntar solo el paquete en primer plano; no vuelques el árbol completo para validar acciones.
     rm -f "$f" 2>/dev/null
     bc_raw com.accessdroid.termux.ACTION_GET_FOREGROUND_PACKAGE || return 1
     wait_file "$f" 3 || return 1
@@ -1036,20 +1033,22 @@ cmd_scrollto()   { bc com.accessdroid.termux.ACTION_SCROLL_TO --es text "$1"; }
 
 # Espera semántica: lee el árbol de accesibilidad, nunca crea ni necesita PNG.
 cmd_waittext() {
-    local needle="${1:-}" timeout="${2:-8}" started="${SECONDS:-0}" out rc
+    local needle="${1:-}" timeout="${2:-8}" started="${SECONDS:-0}"
+    local f=/sdcard/Download/accessdroid-tree.txt
     [[ -n "$needle" ]] || { echo 'uso: amctl waittext "texto visible" [timeout 1..20]' >&2; return 2; }
     [[ "$timeout" =~ ^[0-9]+$ ]] && (( timeout >= 1 && timeout <= 20 )) || {
         echo "amctl waittext: timeout debe ser un entero entre 1 y 20 segundos" >&2; return 2;
     }
     while (( SECONDS - started <= timeout )); do
-        out=$(cmd_tree 2>&1); rc=$?
-        if (( rc == 6 )); then printf '%s\n' "$out" >&2; return 6; fi
-        if (( rc != 0 )); then printf '%s\n' "$out" >&2; return "$rc"; fi
-        if printf '%s' "$out" | grep -Fqi -- "$needle"; then
+        guard_readonly waittext || return $?
+        rm -f "$f" 2>/dev/null
+        bc_raw com.accessdroid.termux.ACTION_GET_UI_TREE || { echo "amctl waittext: no se pudo pedir el árbol UI" >&2; return 1; }
+        wait_file "$f" 3 || { echo "amctl waittext: CostPhone no respondió al leer el árbol UI" >&2; return 1; }
+        if grep -Fqi -- "$needle" "$f"; then
             printf 'visible: %s\n' "$needle"
             return 0
         fi
-        sleep 0.15
+        sleep 0.25
     done
     printf 'timeout: no apareció "%s" en %ss\n' "$needle" "$timeout" >&2
     return 1

@@ -131,8 +131,10 @@ EOF
 - Si la sesión no está, todo lo demás funciona igual por el broadcasts de `am`.
 - Si rish dice "Server is not running" o "Request timeout", amctl avisa una vez,
   deja la sesión y sigue por `am`: **no reintenta en bucle**.
-- `amctl status` es la primera comprobación si algo va lento o falla.
-- Si CostPhone no responde, ejecuta `amctl doctor`. Después abre Inicio → Reparar conexión y vuelve a activar CostPhone en Accesibilidad. Si Termux no ve los archivos compartidos, ejecuta `termux-setup-storage`.
+- `amctl status` informa del transporte; `amctl doctor` comprueba la respuesta real de Accesibilidad.
+- Si CostPhone no responde, abre la app, pulsa **Reparar conexión** y vuelve a activar CostPhone en Ajustes → Accesibilidad.
+- Si Shizuku no está iniciado, abre su app e inicia el servicio. En Android 11+ sin root suele requerir Depuración inalámbrica/emparejamiento ADB; CostPhone no puede saltarse esa autorización. Vuelve a CostPhone y concede permiso.
+- Si Termux no puede leer resultados compartidos, ejecuta `termux-setup-storage` y concede el permiso.
 - Usa IDs/textos conocidos y agrupa pasos con `amctl batch`; no uses `snap` ni PNG entre cada toque.
 
 ## Modos: safe (por defecto) y full
@@ -163,8 +165,9 @@ Consecuencias práticas:
   requieren la guardia, así que son la vía para preparar la pantalla.
 - Con app bloqueada, `snap`/`tree` devuelven sólo
   `Pantalla: <app> — bloqueada` (sin elementos) y `see`/`screencap` se niegan.
-- Cada acción guardada paga una lectura extra de la app en primer plano: es el
-  precio de no decidir con datos viejos.
+- Cada acción comprueba el paquete actual, pero la guardia usa una consulta
+  ligera; no serializa todo el árbol UI. Agrupa pasos conocidos con
+  `amctl batch` y reserva `snap` para descubrir controles.
 
 ### rc=6 no se esquiva
 
