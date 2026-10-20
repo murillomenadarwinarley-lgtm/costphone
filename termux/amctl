@@ -284,6 +284,9 @@ AMCTL_SIZE_TTL="${AMCTL_SIZE_TTL:-300}"
 AMCTL_PKG_RE='^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+$'
 SESSION_OUT=""
 FG_DENY=""
+GUARDED_FG=""
+BATCH_ACTIVE=0
+BATCH_EXPECTED_PKG=""
 
 # every command that leaves amctl is recorded here (never the secret)
 amctl_log() {
@@ -484,6 +487,7 @@ blocked_match() {
 # the guard: before every broadcast that can act on the foreground app
 guard_action() {
     local what="$1" fg
+    GUARDED_FG=""
     if [[ -f "$AMCTL_GUARD_OFF" ]]; then
         amctl_log GUARD "guard-off activo — guardia desactivada ($what)"
         return 0
@@ -498,6 +502,7 @@ guard_action() {
         echo "aviso: app en primer plano desconocida (modo $AMCTL_MODE): '$what' pasa sin comprobación" >&2
         return 0
     fi
+    GUARDED_FG="$fg"
     if [[ "$fg" == com.termux ]]; then
         amctl_log DENY "$what (foreground=$fg anti-Termux)"
         echo "amctl: NO — Termux está en primer plano (guarda anti-Termux)." >&2
@@ -514,8 +519,11 @@ guard_action() {
 
 # silent variant for read-only commands (snap/tree/screencap): same decision,
 # but without revealing the contents of a blocked app
+
+
 guard_readonly() {
     local what="$1" fg
+    GUARDED_FG=""
     if [[ -f "$AMCTL_GUARD_OFF" ]]; then
         amctl_log GUARD "guard-off activo — guardia desactivada ($what)"
         return 0
@@ -530,6 +538,7 @@ guard_readonly() {
         echo "aviso: app en primer plano desconocida (modo $AMCTL_MODE): '$what' sin comprobación" >&2
         return 0
     fi
+    GUARDED_FG="$fg"
     if [[ "$fg" == com.termux ]]; then
         amctl_log DENY "$what (foreground=$fg anti-Termux)"
         echo "Pantalla: Termux — bloqueada"
@@ -542,6 +551,7 @@ guard_readonly() {
     fi
     return 0
 }
+
 
 num_arg() {
     [[ "$1" =~ ^[0-9]+$ ]] || { echo "amctl: '$1' no es un entero >= 0" >&2; return 1; }
@@ -617,10 +627,25 @@ bc_raw() {
 # ---- guarded broadcast: every action that can act on the foreground app ----
 # (el broadcast lleva siempre el secreto y, con -d N, el display destino)
 bc() {
-    # $1 = action, resto = extras --es/--ei/--el
     local action="$1"; shift
-    # logged only when it really goes out; a refusal is logged as DENY alone
     if ! action_exempt "$action" "$@"; then
+        if [[ "${BATCH_ACTIVE:-0}" == "1" && ! -f "$AMCTL_GUARD_OFF" ]]; then
+            if [[ -z "$BATCH_EXPECTED_PKG" ]]; then
+                guard_action "$action" || return $?
+                BATCH_EXPECTED_PKG="$GUARDED_FG"
+                if [[ -n "$BATCH_EXPECTED_PKG" ]]; then
+                    amctl_log broadcast "$action (batch target=$BATCH_EXPECTED_PKG)"
+                    bc_raw "$action" "$@" --es expectedPackage "$BATCH_EXPECTED_PKG"
+                    return $?
+                fi
+                amctl_log broadcast "$action (batch target unknown)"
+                bc_raw "$action" "$@"
+                return $?
+            fi
+            amctl_log broadcast "$action (batch target=$BATCH_EXPECTED_PKG)"
+            bc_raw "$action" "$@" --es expectedPackage "$BATCH_EXPECTED_PKG"
+            return $?
+        fi
         guard_action "$action" || return $?
     fi
     amctl_log broadcast "$action"
@@ -1050,21 +1075,47 @@ cmd_scrollto()   { bc com.accessdroid.termux.ACTION_SCROLL_TO --es text "$1"; }
 # Espera semántica: lee el árbol de accesibilidad, nunca crea ni necesita PNG.
 cmd_waittext() {
     local needle="${1:-}" timeout="${2:-8}" started="${SECONDS:-0}"
-    local f=/sdcard/Download/accessdroid-tree.txt
+    local f=/sdcard/Download/accessdroid-tree.txt expected_pkg="" actual_pkg=""
     [[ -n "$needle" ]] || { echo 'uso: amctl waittext "texto visible" [timeout 1..20]' >&2; return 2; }
     [[ "$timeout" =~ ^[0-9]+$ ]] && (( timeout >= 1 && timeout <= 20 )) || {
         echo "amctl waittext: timeout debe ser un entero entre 1 y 20 segundos" >&2; return 2;
     }
-    while (( SECONDS - started <= timeout )); do
+    if [[ "${BATCH_ACTIVE:-0}" == "1" && -n "$BATCH_EXPECTED_PKG" ]]; then
+        expected_pkg="$BATCH_EXPECTED_PKG"
+    else
         guard_readonly waittext || return $?
+        expected_pkg="$GUARDED_FG"
+        if [[ "${BATCH_ACTIVE:-0}" == "1" && -n "$expected_pkg" ]]; then
+            BATCH_EXPECTED_PKG="$expected_pkg"
+        fi
+    fi
+    # Cada árbol lleva expectedPackage: el servicio valida la app antes de
+    # escribirlo, y así evitamos otro broadcast de guardia por iteración.
+    while (( SECONDS - started <= timeout )); do
         rm -f "$f" 2>/dev/null
-        bc_raw com.accessdroid.termux.ACTION_GET_UI_TREE || { echo "amctl waittext: no se pudo pedir el árbol UI" >&2; return 1; }
-        wait_file "$f" 3 || { echo "amctl waittext: CostPhone no respondió al leer el árbol UI" >&2; return 1; }
+        if [[ -n "$expected_pkg" ]]; then
+            bc_raw com.accessdroid.termux.ACTION_GET_UI_TREE --es expectedPackage "$expected_pkg" || {
+                echo "amctl waittext: no se pudo pedir el árbol UI" >&2; return 1;
+            }
+        else
+            bc_raw com.accessdroid.termux.ACTION_GET_UI_TREE || {
+                echo "amctl waittext: no se pudo pedir el árbol UI" >&2; return 1;
+            }
+        fi
+        wait_file "$f" 3 || { echo "amctl waittext: CostPhone no respondió o la app cambió durante la espera" >&2; return 1; }
+        if [[ -n "$expected_pkg" ]]; then
+            actual_pkg="$(sed -n 's/^# pkg=//p' "$f" | head -n 1)"
+            if [[ "$actual_pkg" != "$expected_pkg" ]]; then
+                rm -f "$f" 2>/dev/null
+                echo "amctl waittext: la app activa cambió; se detiene por seguridad" >&2
+                return 6
+            fi
+        fi
         if grep -Fqi -- "$needle" "$f"; then
             printf 'visible: %s\n' "$needle"
             return 0
         fi
-        sleep 0.25
+        sleep 0.15
     done
     printf 'timeout: no apareció "%s" en %ss\n' "$needle" "$timeout" >&2
     return 1
@@ -1074,41 +1125,58 @@ cmd_waittext() {
 # Un paso por línea; después del comando se acepta el resto de la línea como argumento.
 # Todas las interacciones pasan por bc()/guard_action, incluidas las del lote.
 cmd_batch() {
-    local line cmd rest count=0 line_no=0 rc first_char expected wait_s
+    local line cmd rest count=0 line_no=0 rc first_char expected wait_s final_rc=0
+    BATCH_ACTIVE=1
+    BATCH_EXPECTED_PKG=""
     while IFS= read -r line || [[ -n "$line" ]]; do
         line_no=$((line_no + 1))
         [[ "$line" =~ ^[[:space:]]*$ ]] && continue
         first_char="${line#"${line%%[![:space:]]*}"}"
-        case "$first_char" in \#*) continue ;; esac
+        case "$first_char" in \\#*) continue ;; esac
         line="$first_char"
         cmd="${line%%[[:space:]]*}"
         rest="${line#"$cmd"}"
         rest="${rest#"${rest%%[![:space:]]*}"}"
-        if [[ "$rest" == \"*\" ]]; then rest="${rest:1:${#rest}-2}"
-        elif [[ "$rest" == \'*\' ]]; then rest="${rest:1:${#rest}-2}"
+
+        if [[ "$cmd" == "waittext" ]]; then
+            # Separar el timeout antes de quitar comillas.
+            expected="$rest"; wait_s=8
+            if [[ "$rest" =~ ^(.+)[[:space:]]+([0-9]{1,2})$ ]]; then
+                expected="${BASH_REMATCH[1]}"; wait_s="${BASH_REMATCH[2]}"
+            fi
+            if [[ "${expected:0:1}" == '"' && "${expected: -1}" == '"' ]]; then
+                expected="${expected:1:${#expected}-2}"
+            elif [[ "${expected:0:1}" == "'" && "${expected: -1}" == "'" ]]; then
+                expected="${expected:1:${#expected}-2}"
+            fi
+            cmd_waittext "$expected" "$wait_s"
+        else
+            if [[ "$rest" == \\"* ]]; then rest="${rest:1:${#rest}-2}"
+            elif [[ "$rest" == \\'* ]]; then rest="${rest:1:${#rest}-2}"
+            fi
+            case "$cmd" in
+                click)     if [[ -z "$rest" ]]; then echo "batch:$line_no: falta texto" >&2; final_rc=2; break; fi; cmd_click "$rest" ;;
+                clickid)   if [[ -z "$rest" ]]; then echo "batch:$line_no: falta resource ID" >&2; final_rc=2; break; fi; cmd_clickid "$rest" ;;
+                type)      if [[ -z "$rest" ]]; then echo "batch:$line_no: falta texto" >&2; final_rc=2; break; fi; cmd_type "$rest" ;;
+                focus)     cmd_focus "$rest" ;;
+                cleartext) cmd_cleartext ;;
+                paste)     cmd_paste ;;
+                back)      cmd_back ;;
+                scroll)    cmd_scroll "${rest:-down}" ;;
+                *) echo "batch:$line_no: comando no permitido '$cmd'" >&2; final_rc=2; break ;;
+            esac
         fi
-        case "$cmd" in
-            click)     [[ -n "$rest" ]] || { echo "batch:$line_no: falta texto" >&2; return 2; }; cmd_click "$rest" ;;
-            clickid)   [[ -n "$rest" ]] || { echo "batch:$line_no: falta resource ID" >&2; return 2; }; cmd_clickid "$rest" ;;
-            type)      [[ -n "$rest" ]] || { echo "batch:$line_no: falta texto" >&2; return 2; }; cmd_type "$rest" ;;
-            focus)     cmd_focus "$rest" ;;
-            cleartext) cmd_cleartext ;;
-            paste)     cmd_paste ;;
-            back)      cmd_back ;;
-            scroll)    cmd_scroll "${rest:-down}" ;;
-            waittext)
-                expected="$rest"; wait_s=8
-                if [[ "$rest" =~ ^(.+)[[:space:]]+([0-9]{1,2})$ ]]; then
-                    expected="${BASH_REMATCH[1]}"; wait_s="${BASH_REMATCH[2]}"
-                fi
-                cmd_waittext "$expected" "$wait_s"
-                ;;
-            *) echo "batch:$line_no: comando no permitido '$cmd'" >&2; return 2 ;;
-        esac
         rc=$?
-        if (( rc != 0 )); then echo "batch abortado en línea $line_no ($cmd, rc=$rc)" >&2; return "$rc"; fi
+        if (( rc != 0 )); then
+            echo "batch abortado en línea $line_no ($cmd, rc=$rc)" >&2
+            final_rc=$rc
+            break
+        fi
         count=$((count + 1))
     done
+    BATCH_ACTIVE=0
+    BATCH_EXPECTED_PKG=""
+    if (( final_rc != 0 )); then return "$final_rc"; fi
     (( count > 0 )) || { echo "amctl batch: no se recibieron pasos" >&2; return 2; }
     printf 'batch OK: %d pasos\n' "$count"
 }
