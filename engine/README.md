@@ -38,9 +38,9 @@ The inspect command is intentionally expected to fail closed while Termux is the
 Add the following entry under the existing mcp object in ~/.config/opencode/opencode.json (create mcp only if it does not exist). Merge it into your current configuration; **do not replace the whole file**. Replace the illustrative paths with the exact paths shown by running echo "$HOME" on your phone.
 
 ~~~json
-{
+"costphone-engine": {
   "type": "local",
-  "command": ["python3", "/data/data/com.termux/files/home/.local/share/costphone-engine/mcp_server.py"],
+  "command": ["/data/data/com.termux/files/home/bin/costphone-mcp"],
   "enabled": true,
   "timeout": 10000
 }
