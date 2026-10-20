@@ -8,7 +8,7 @@ Esta variante ejecuta **el motor y el servidor MCP directamente en Windows**. No
 - **desktop_screenshot:** captura real de la pantalla enviada al agente como imagen MCP.
 - **desktop_launch_app:** abre un ejecutable .exe concreto, sin shell ni argumentos.
 - **desktop_open_url:** abre una URL HTTP/HTTPS en el navegador predeterminado.
-- **desktop_inspect_controls:** lee los controles visibles que Windows UI Automation expone, con nombre, Automation ID, tipo, estado y rectángulo.
+- **desktop_inspect_controls:** lee los controles visibles que Windows UI Automation expone, con nombre, Automation ID, tipo, estado, rectángulo e identidad de la ventana/proceso. Los selectores están ligados a la ventana que se inspeccionó para rechazar acciones obsoletas.
 - **desktop_click_control:** hace clic en un control seleccionado de forma exacta por los metadatos de Windows.
 - **desktop_set_control_text:** establece texto en controles de tipo Edit; exige permiso de entrada y bloquea campos identificados como contraseña.
 - **desktop_click, desktop_type_text, desktop_press_key:** control de ratón/teclado tras autorización explícita durante la instalación.
