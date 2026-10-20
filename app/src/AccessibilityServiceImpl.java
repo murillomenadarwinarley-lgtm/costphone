@@ -181,7 +181,14 @@ public class AccessibilityServiceImpl extends AccessibilityService {
         filter.addAction(ACTION_DISPLAY);
         filter.addAction(ACTION_DISPLAY_BACK);
         filter.addAction(ACTION_PING);
-        registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED);
+        // The flags overload was added in Android 13 (API 33). Keep the
+        // classic registration on Android 7–12, otherwise the service can
+        // fail during startup and Termux broadcasts will never reach it.
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED);
+        } else {
+            registerReceiver(receiver, filter);
+        }
         Log.i(TAG, "AccessibilityService connected – ready");
     }
 
