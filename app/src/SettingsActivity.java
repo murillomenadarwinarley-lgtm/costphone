@@ -369,6 +369,13 @@ public class SettingsActivity extends Activity {
 
         // ── Tarjeta de estado grande: icono en aro + Conectado + descripción ──
         LinearLayout statusCard = Ui.card(this);
+        GradientDrawable statusHeroBg = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Ui.color(this, "hero"), Ui.color(this, "surface")});
+        statusHeroBg.setCornerRadius(dp(22));
+        statusHeroBg.setStroke(dp(1), Ui.color(this, "outline_accent"));
+        statusCard.setBackground(statusHeroBg);
+        statusCard.setElevation(dp(3));
 
         LinearLayout heroRow = new LinearLayout(this);
         heroRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -377,7 +384,7 @@ public class SettingsActivity extends Activity {
         // icono en aro
         LinearLayout ring = new LinearLayout(this);
         ring.setGravity(Gravity.CENTER);
-        ring.setBackground(Ui.shape(this, "surface2", 999f, "border", 2f));
+        ring.setBackground(Ui.shape(this, "surface2", 999f, "outline_accent", 2f));
         ImageView heroIcon = new ImageView(this);
         heroIcon.setImageResource(R.drawable.ic_connected);
         heroIcon.setColorFilter(ACCENT_GREEN);
@@ -1862,6 +1869,7 @@ public class SettingsActivity extends Activity {
         if (headerDot != null) {
             headerDot.setBackground(rounded(color, 999, 0));
             headerStatusText.setText(text);
+            headerStatusText.setTextColor(color);
         }
         if (heroStatusIcon != null) {
             heroStatusIcon.setImageResource(state == 2
