@@ -67,9 +67,20 @@ Skill file: ~/.config/opencode/skills/android/phone-control/SKILL.md
 <!-- end phone-control -->
 AGENT_BLOCK
 mv "$TMP_AGENTS" "$AGENTS"
+step "Activando la ruta rápida (intento único)"
+if command -v rish >/dev/null 2>&1; then
+    if SESSION_START_WAIT=4 "$BIN/amctl" session-start; then
+        echo "     Shizuku/rish listo; la sesión persistente queda abierta para las tareas."
+    else
+        echo "     Shizuku/rish no respondió. Se conserva el fallback AM; no reintentes en bucle."
+    fi
+else
+    echo "     rish no está en PATH; se conserva el fallback AM."
+    echo "     Abre Shizuku, inicia su servidor y verifica la instalación de rish."
+fi
+
 step "Comprobación final"
 printf '\nActualización instalada.\n'
 printf '1) Reinicia OpenCode para que cargue la skill actualizada.\n'
-printf '2) En una sesión nueva del agente, si Shizuku/rish está disponible, ejecutar una vez: SESSION_START_WAIT=4 amctl session-start\n'
-printf '3) Si Android desactivó Accesibilidad tras actualizar CostPhone, actívala otra vez en Ajustes → Accesibilidad → CostPhone.\n'
-printf '4) No ejecutes status/doctor/logs en tareas normales; úsalos solo si hay un fallo repetible.\n'
+printf '2) Si Android desactivó Accesibilidad tras actualizar CostPhone, actívala otra vez en Ajustes → Accesibilidad → CostPhone.\n'
+printf '3) No ejecutes status/doctor/logs en tareas normales; úsalos solo si hay un fallo repetible.\n'
