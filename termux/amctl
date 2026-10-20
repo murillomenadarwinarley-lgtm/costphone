@@ -580,7 +580,7 @@ out_path_ok() {
 action_exempt() {
     local a="$1"; shift
     case "$a" in
-        *.ACTION_GET_UI_TREE|*.ACTION_SCREENDUMP|*.ACTION_BACK|*.ACTION_HOME|*.ACTION_RECENTS) return 0 ;;
+        *.ACTION_GET_UI_TREE|*.ACTION_SCREENDUMP|*.ACTION_BACK|*.ACTION_HOME|*.ACTION_RECENTS|*.ACTION_START_ACTIVITY|*.ACTION_OPEN_URI) return 0 ;;
         *ACTION_PRESS_KEY)
             local prev='' x
             for x in "$@"; do
