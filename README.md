@@ -172,11 +172,14 @@ snapshot/tap, cómo leer el árbol, troubleshooting, etc. `install.sh` la deja
 en el lugar correcto y la registra en `AGENTS.md` automáticamente.
 
 
-## Usar CostPhone desde un PC Windows
+## CostPhone desde Windows
 
-Puedes ejecutar OpenCode en Windows y conectarlo por SSH al motor que permanece en el teléfono en Termux, sin pagar por un servicio de puente y sin cambiar la firma del APK. Sigue la [guía de PC Windows](docs/pc-windows.md) y usa el instalador PowerShell pc/windows/setup-costphone.ps1.
+Hay **dos modos separados**:
 
-El motor y amctl siguen ejecutándose en Android; Windows aloja OpenCode y se conecta por SSH a través de la red local.
+- **CostPhone PC nativo (independiente del teléfono):** ejecuta el servidor MCP, las capturas y la automatización del escritorio directamente en Windows. No requiere Android, Termux, SSH ni el APK. Instala con [la guía nativa de Windows](docs/pc-native-windows.md) y el script pc/windows/install-costphone-pc.ps1. Esta primera versión ofrece inspección de ventana, capturas, apertura de aplicaciones/URL y control opcional de teclado/ratón.
+- **Usar Windows para controlar el teléfono Android (opcional):** si quieres que el agente controle el móvil, OpenCode en Windows puede conectarse por SSH al motor que permanece en Termux. Sigue la [guía del puente Android](docs/pc-windows.md) y usa pc/windows/setup-costphone.ps1.
+
+La versión nativa se registra como `costphone-pc`; el puente Android conserva su registro `costphone-engine`. Se pueden mantener ambas configuraciones. Ninguna sustituye la APK ni los secretos de firma de Android.
 
 ## Compilar el APK tú mismo
 
