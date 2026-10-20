@@ -60,6 +60,11 @@ class FakeAdapter:
         return {"text_set": True, "characters": len(text), "control": {"name": "Search", "control_type": "Edit"}}
 
 
+    def set_control_checked(self, selector, checked):
+        self.calls.append(("set_control_checked", selector, checked))
+        return {"checked": checked, "changed": True, "control": {"name": "Remember me", "control_type": "CheckBox"}}
+
+
 class ValidationTests(unittest.TestCase):
     def test_validates_http_url(self):
         self.assertEqual(validate_url("https://example.com/path"), "https://example.com/path")
@@ -166,9 +171,21 @@ class DesktopEngineTests(unittest.TestCase):
         self.assertEqual(adapter.calls[1][0], "set_control_text")
         self.assertEqual(adapter.calls[1][2], "café")
 
+    def test_set_checkbox_state_requires_permission_and_boolean(self):
+        adapter = FakeAdapter()
+        engine = WindowsDesktopEngine(adapter, allow_input=True)
+        self.assertTrue(engine.set_control_checked({"name": "Remember me", "control_type": "CheckBox", "window_handle": 100, "process_id": 22}, True)["ok"])
+        self.assertEqual(adapter.calls[-1], ("set_control_checked", {"name": "Remember me", "control_type": "CheckBox", "window_handle": 100, "process_id": 22}, True))
+        with self.assertRaises(EngineError):
+            engine.set_control_checked({"name": "Remember me", "window_handle": 100, "process_id": 22}, "true")
+        disabled = WindowsDesktopEngine(FakeAdapter(), allow_input=False)
+        with self.assertRaises(EngineError) as ctx:
+            disabled.set_control_checked({"name": "Remember me", "window_handle": 100, "process_id": 22}, False)
+        self.assertEqual(ctx.exception.code, "input_disabled")
+
     def test_mcp_tools_and_unknown_tool(self):
         names = {tool["name"] for tool in TOOLS}
-        self.assertEqual(names, {"desktop_inspect", "desktop_screenshot", "desktop_launch_app", "desktop_open_url", "desktop_click", "desktop_scroll", "desktop_type_text", "desktop_press_key", "desktop_inspect_controls", "desktop_click_control", "desktop_set_control_text"})
+        self.assertEqual(names, {"desktop_inspect", "desktop_screenshot", "desktop_launch_app", "desktop_open_url", "desktop_click", "desktop_scroll", "desktop_type_text", "desktop_press_key", "desktop_inspect_controls", "desktop_click_control", "desktop_set_control_text", "desktop_set_control_checked"})
         response = dispatch("tools/call", {"name": "not_a_tool", "arguments": {}}, WindowsDesktopEngine(FakeAdapter()))
         self.assertEqual(response["error"]["code"], -32602)
 
