@@ -78,7 +78,7 @@ public final class ConnectionLog {
                 @Override public void run() {
                     try (FileWriter w = new FileWriter(target, true)) {
                         w.write(line);
-                        w.write("\\n");
+                        w.write("\n");
                     } catch (Exception ignored) { }
                     if (target.length() > MAX_FILE_BYTES) compactFile(target);
                 }
@@ -97,7 +97,7 @@ public final class ConnectionLog {
         try (FileWriter w = new FileWriter(target, false)) {
             for (String line : snapshot) {
                 w.write(line);
-                w.write("\\n");
+                w.write("\n");
             }
         } catch (Exception ignored) { }
     }
