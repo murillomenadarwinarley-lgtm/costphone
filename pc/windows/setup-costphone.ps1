@@ -29,7 +29,7 @@ Write-Host $publicKey -ForegroundColor Yellow
 Write-Host ""
 Write-Host "En Termux ejecuta: chmod 700 ~/.ssh; chmod 600 ~/.ssh/authorized_keys; sshd -p $Port"
 [void](Read-Host "Cuando agregues la clave y arranque sshd en el teléfono, presiona Enter")
-$sshArgs=@("-T","-p",[string]$Port,"-o","BatchMode=yes","-o","ConnectTimeout=10","-o","StrictHostKeyChecking=accept-new","$TermuxUser@$PhoneHost","printf COSTPHONE_SSH_OK")
+$sshArgs=@("-T","-p",[string]$Port,"-i",$keyPath,"-o","IdentitiesOnly=yes","-o","BatchMode=yes","-o","ConnectTimeout=10","-o","StrictHostKeyChecking=accept-new","$TermuxUser@$PhoneHost","printf COSTPHONE_SSH_OK")
 $sshOutput=& $sshCommand.Source @sshArgs 2>&1
 $sshExitCode=$LASTEXITCODE
 $sshText=($sshOutput | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
@@ -55,7 +55,7 @@ if ($null -eq $mcpProperty -or $null -eq $mcpProperty.Value) {
 $mcp=$config.mcp
 $entry=[pscustomobject][ordered]@{
   type="local"
-  command=@("ssh.exe","-T","-p",[string]$Port,"-o","BatchMode=yes","-o","ServerAliveInterval=30","-o","ServerAliveCountMax=2","$TermuxUser@$PhoneHost",'exec "$HOME/bin/costphone-mcp"')
+  command=@("ssh.exe","-T","-p",[string]$Port,"-i",$keyPath,"-o","IdentitiesOnly=yes","-o","BatchMode=yes","-o","ServerAliveInterval=30","-o","ServerAliveCountMax=2","$TermuxUser@$PhoneHost",'exec "$HOME/bin/costphone-mcp"')
   enabled=$true
   timeout=120000
 }
