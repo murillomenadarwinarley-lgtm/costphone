@@ -64,6 +64,8 @@ public class AccessibilityServiceImpl extends AccessibilityService {
     private static final String ACTION_POWER = "com.accessdroid.termux.ACTION_POWER";
     private static final String ACTION_DISPLAY = "com.accessdroid.termux.ACTION_DISPLAY";
     private static final String ACTION_DISPLAY_BACK = "com.accessdroid.termux.ACTION_DISPLAY_BACK";
+    private static final String ACTION_PING = "com.accessdroid.termux.ACTION_PING";
+    private static final String FILE_PING = "accessdroid-ping.txt";
 
     /** Pantalla virtual (display secundario). */
     static final String SETTING_OVERLAY_DISPLAYS = "overlay_display_devices";
@@ -178,6 +180,7 @@ public class AccessibilityServiceImpl extends AccessibilityService {
         filter.addAction(ACTION_POWER);
         filter.addAction(ACTION_DISPLAY);
         filter.addAction(ACTION_DISPLAY_BACK);
+        filter.addAction(ACTION_PING);
         registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED);
         Log.i(TAG, "AccessibilityService connected – ready");
     }
@@ -574,6 +577,18 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                         }
                     }
                 } catch (Exception e) { Log.w(TAG, "openUri fail", e); }
+                break;
+            }
+            case ACTION_PING: {
+                // Authenticated round-trip used by "amctl doctor" to verify
+                // Termux -> AM transport -> AccessibilityService, not just app launch.
+                String nonce = intent.getStringExtra("nonce");
+                String report = "pong=" + (nonce == null ? "" : nonce)
+                    + "\npackage=" + getPackageName()
+                    + "\nservice=connected"
+                    + "\nuptimeMs=" + android.os.SystemClock.uptimeMillis();
+                saveToDownloads(FILE_PING, "text/plain",
+                    report.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 break;
             }
             case ACTION_DISPLAY:
