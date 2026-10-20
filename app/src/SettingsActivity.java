@@ -363,6 +363,7 @@ public class SettingsActivity extends Activity {
 
     private LinearLayout buildInicioPanel() {
         LinearLayout panel = createPanel();
+        panel.addView(pageBanner(R.drawable.ic_home, "COSTPHONE  /  CENTRO DE CONTROL", "Todo tu teléfono, bajo control", "Estado del servicio, acciones rápidas y actividad reciente."), lpMATCH(5));
 
         // chip Shizuku (antes barra fija en header)
         panel.addView(shizukuChip(), lpMATCH(0));
@@ -599,6 +600,7 @@ public class SettingsActivity extends Activity {
 
     private LinearLayout buildControlPanel() {
         LinearLayout panel = createPanel();
+        panel.addView(pageBanner(R.drawable.ic_control, "CONTROL INTERACTIVO", "Control del dispositivo", "Gestos, navegación y escritura reunidos en un solo lugar."), lpMATCH(5));
 
         // ── Gestos ──
         LinearLayout gesturesCard = sectionCard("Gestos", R.drawable.ic_touch);
@@ -872,6 +874,7 @@ public class SettingsActivity extends Activity {
 
     private LinearLayout buildInspectorPanel() {
         LinearLayout panel = createPanel();
+        panel.addView(pageBanner(R.drawable.ic_inspector, "LECTURA DE INTERFAZ", "Explora la pantalla", "Encuentra elementos y consulta la estructura visible de las apps."), lpMATCH(5));
 
         // ── Árbol de accesibilidad ──
         LinearLayout treeCard = sectionCard("Árbol de accesibilidad", R.drawable.ic_tree);
@@ -976,6 +979,7 @@ public class SettingsActivity extends Activity {
 
     private LinearLayout buildRutinasPanel() {
         LinearLayout panel = createPanel();
+        panel.addView(pageBanner(R.drawable.ic_routines, "AUTOMATIZACIÓN", "Tus rutinas, a tu manera", "Organiza secuencias reutilizables y ejecuta tus tareas con menos pasos."), lpMATCH(5));
 
         // ── Rutinas guardadas ──
         LinearLayout listCard = sectionCard("Rutinas guardadas", R.drawable.ic_routines);
@@ -1435,6 +1439,7 @@ public class SettingsActivity extends Activity {
 
     private LinearLayout buildAjustesPanel() {
         LinearLayout panel = createPanel();
+        panel.addView(pageBanner(R.drawable.ic_settings, "SISTEMA  /  DIAGNÓSTICO", "Conexiones y ajustes", "Accesibilidad, batería, Shizuku y registros en un panel coherente."), lpMATCH(5));
 
         // ── Batería: chip de estado real + acción ──
         LinearLayout batCard = sectionCard("Batería", R.drawable.ic_battery);
@@ -1953,6 +1958,93 @@ public class SettingsActivity extends Activity {
     // ═══════════════════════════════════════════════════════════════
     //  BUILDERS DE UI
     // ═══════════════════════════════════════════════════════════════
+
+    private LinearLayout pageBanner(int iconRes, String eyebrow, String headline, String description) {
+        LinearLayout banner = new LinearLayout(this);
+        banner.setOrientation(LinearLayout.HORIZONTAL);
+        banner.setGravity(Gravity.CENTER_VERTICAL);
+        banner.setPadding(dp(17), dp(17), dp(15), dp(17));
+
+        GradientDrawable bannerBackground = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Ui.color(this, "hero"), Ui.color(this, "surface")});
+        bannerBackground.setCornerRadius(dp(22));
+        bannerBackground.setStroke(dp(1), Ui.color(this, "outline_accent"));
+        banner.setBackground(bannerBackground);
+        banner.setElevation(dp(3));
+
+        LinearLayout copy = new LinearLayout(this);
+        copy.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams copyLp = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        copyLp.rightMargin = dp(11);
+        banner.addView(copy, copyLp);
+
+        LinearLayout overline = new LinearLayout(this);
+        overline.setOrientation(LinearLayout.HORIZONTAL);
+        overline.setGravity(Gravity.CENTER_VERTICAL);
+        overline.setPadding(dp(8), dp(5), dp(9), dp(5));
+        overline.setBackground(rounded((ACCENT_BLUE & 0x00FFFFFF) | 0x1C000000, 999, 0));
+
+        View dot = new View(this);
+        dot.setBackground(rounded(ACCENT_BLUE, 999, 0));
+        LinearLayout.LayoutParams dotLp = new LinearLayout.LayoutParams(dp(6), dp(6));
+        dotLp.rightMargin = dp(6);
+        overline.addView(dot, dotLp);
+
+        TextView eyebrowView = new TextView(this);
+        eyebrowView.setText(eyebrow);
+        eyebrowView.setTextSize(8.5f);
+        eyebrowView.setLetterSpacing(0.055f);
+        eyebrowView.setTextColor(ACCENT_BLUE);
+        eyebrowView.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        eyebrowView.setMaxLines(1);
+        eyebrowView.setEllipsize(TextUtils.TruncateAt.END);
+        overline.addView(eyebrowView);
+        copy.addView(overline, lpWRAP(0));
+
+        TextView titleView = new TextView(this);
+        titleView.setText(headline);
+        titleView.setTextSize(21);
+        titleView.setTextColor(TEXT_MAIN);
+        titleView.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
+        titleView.setLineSpacing(dp(1), 1.0f);
+        titleView.setMaxLines(2);
+        titleView.setEllipsize(TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams titleLp = lpMATCH(8);
+        copy.addView(titleView, titleLp);
+
+        TextView descriptionView = new TextView(this);
+        descriptionView.setText(description);
+        descriptionView.setTextSize(12);
+        descriptionView.setTextColor(TEXT_DIM);
+        descriptionView.setLineSpacing(dp(3), 1.0f);
+        descriptionView.setMaxLines(3);
+        descriptionView.setEllipsize(TextUtils.TruncateAt.END);
+        copy.addView(descriptionView, lpMATCH(6));
+
+        LinearLayout iconShell = new LinearLayout(this);
+        iconShell.setGravity(Gravity.CENTER);
+        GradientDrawable iconBg = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{(ACCENT_BLUE & 0x00FFFFFF) | 0x26000000,
+                        (ACCENT_GREEN & 0x00FFFFFF) | 0x16000000});
+        iconBg.setCornerRadius(dp(17));
+        iconBg.setStroke(dp(1), Ui.color(this, "outline_accent"));
+        iconShell.setBackground(iconBg);
+        iconShell.setElevation(dp(2));
+
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(iconRes);
+        icon.setColorFilter(ACCENT_BLUE);
+        icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        iconShell.addView(icon, new LinearLayout.LayoutParams(dp(29), dp(29)));
+        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(dp(54), dp(58));
+        iconLp.leftMargin = dp(1);
+        banner.addView(iconShell, iconLp);
+
+        return banner;
+    }
 
     private LinearLayout createPanel() {
         LinearLayout panel = new LinearLayout(this);
