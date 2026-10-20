@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.accessdroid.termux"
-    android:versionCode="27"
-    android:versionName="1.6.6">
+    android:versionCode="28"
+    android:versionName="1.6.7">
 
     <!-- CostPhone: solo servicio de accesibilidad + lanzar apps -->
     <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE"/>
@@ -24,6 +24,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
     <!-- Android 13+: sin esto la notificación no se muestra. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Permite abrir el diálogo del sistema para excluir el ahorro de batería agresivo. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
 
     <supports-screens
         android:smallScreens="true"
@@ -74,6 +76,7 @@
         <service
             android:name=".KeepAliveService"
             android:exported="false"
+            android:stopWithTask="false"
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
