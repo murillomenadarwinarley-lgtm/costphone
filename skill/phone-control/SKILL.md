@@ -297,13 +297,17 @@ Detalle completo y límites: `docs/pantalla-virtual.md` en el repo de CostPhone.
 - No cerrar sesiones de cuentas del usuario ni tocar credenciales.
 - No desactivar la guardia ni abrir el modo full: son decisiones del usuario.
 
-## Rendimiento y estabilidad (v1.6.5)
+## Rendimiento y estabilidad (v1.6.7)
 
 - La app carga cada pestaña cuando se abre por primera vez, no todas al inicio.
 - Los comandos del servicio se procesan en una cola serial de fondo; los árboles de UI y la compresión/guardado de capturas no deben bloquear el hilo visual.
 - La lista visual del registro limita el renderizado a los 80 eventos más recientes. El registro del servicio sigue disponible para el diagnóstico.
+- Al desvincularse Accesibilidad, CostPhone espera 15 s y solo apaga el keep-alive si Android confirma que el usuario deshabilitó el servicio.
+- Al volver a abrir CostPhone, si Accesibilidad continúa habilitada, vuelve a iniciar el servicio persistente.
+- En Android 6+ abre Ajustes → Aplicaciones → CostPhone → Batería y elige `Sin restricciones`; en MIUI/HyperOS activa `Inicio automático` para CostPhone y Termux. También desactiva el ahorro agresivo para Termux.
+- Forzar detención desde Ajustes no puede neutralizarse desde una app; hay que abrir CostPhone otra vez.
 - Si tras actualizar el servicio aparece desconectado, vuelve a activarlo en Ajustes → Accesibilidad → CostPhone; Android puede deshabilitarlo al reinstalar una APK.
-- Para investigar un cierre, recopila una traza después de reproducirlo: `adb logcat -d -t 2000 | grep -E 'FATAL EXCEPTION|ANR in|CostPhone|AccessDroid'`. Busca especialmente `FATAL EXCEPTION`, `ANR in` y la primera traza de CostPhone.
+- Para investigar un cierre, recopila una traza después de reproducirlo: `adb logcat -d -t 2000 | grep -E 'FATAL EXCEPTION|ANR in|CostPhone|AccessDroid'`. Busca `FATAL EXCEPTION`, `ANR in`, `KEEPALIVE_START_REJECTED` y `PERF command=` para distinguir cierres de retrasos en la cola.
 
 ## Troubleshooting
 
