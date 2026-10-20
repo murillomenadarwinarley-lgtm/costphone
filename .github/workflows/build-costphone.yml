@@ -56,6 +56,24 @@ jobs:
           python3 -m py_compile termux/amctl-snap.py
           test -s skill/phone-control/SKILL.md
 
+      - name: Inspect legacy APK signing certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          LEGACY_APK="$(find apk -maxdepth 1 -type f -name 'CostPhone-v*.apk' -print | sort -V | tail -n 1)"
+          test -s "$LEGACY_APK"
+          CERT="$(apksigner verify --print-certs "$LEGACY_APK" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print $2; exit}')"
+          test -n "$CERT"
+          echo "Legacy APK used as reference: $(basename "$LEGACY_APK")"
+          echo "Legacy signing certificate SHA-256: $CERT"
+          {
+            echo "## APK heredada: certificado de firma"
+            echo
+            echo "Referencia: $(basename "$LEGACY_APK")"
+            echo
+            echo "SHA-256 del certificado: $CERT"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Compile debug build for code validation only
         shell: bash
         run: |
