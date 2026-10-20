@@ -1151,8 +1151,8 @@ cmd_batch() {
             fi
             cmd_waittext "$expected" "$wait_s"
         else
-            if [[ "$rest" == \\"* ]]; then rest="${rest:1:${#rest}-2}"
-            elif [[ "$rest" == \\'* ]]; then rest="${rest:1:${#rest}-2}"
+            if [[ "${rest:0:1}" == '"' && "${rest: -1}" == '"' ]]; then rest="${rest:1:${#rest}-2}"
+            elif [[ "${rest:0:1}" == "'" && "${rest: -1}" == "'" ]]; then rest="${rest:1:${#rest}-2}"
             fi
             case "$cmd" in
                 click)     if [[ -z "$rest" ]]; then echo "batch:$line_no: falta texto" >&2; final_rc=2; break; fi; cmd_click "$rest" ;;
