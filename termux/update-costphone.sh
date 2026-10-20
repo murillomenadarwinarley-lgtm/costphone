@@ -3,7 +3,8 @@
 set -euo pipefail
 BASE_URL="https://raw.githubusercontent.com/murillomenadarwinarley-lgtm/costphone/mi-cambio"
 BIN="$HOME/bin"
-SKILL_DIR="$HOME/.config/opencode/skills/android/phone-control"
+SKILL_DIR="$HOME/.config/opencode/skills/phone-control"
+OLD_SKILL_DIR="$HOME/.config/opencode/skills/android/phone-control"
 AGENTS="$HOME/.config/opencode/AGENTS.md"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -28,6 +29,12 @@ install -m 755 "$TMP/amctl" "$BIN/amctl"
 install -m 755 "$TMP/amctl-snap.py" "$BIN/amctl-snap.py"
 install -m 755 "$TMP/update-costphone" "$BIN/update-costphone"
 install -m 644 "$TMP/SKILL.md" "$SKILL_DIR/SKILL.md"
+# Remove the old nested copy so OpenCode cannot discover duplicate skill IDs.
+if [[ -f "$OLD_SKILL_DIR/SKILL.md" ]]; then
+    rm -f "$OLD_SKILL_DIR/SKILL.md"
+    rmdir "$OLD_SKILL_DIR" 2>/dev/null || true
+    rmdir "$(dirname "$OLD_SKILL_DIR")" 2>/dev/null || true
+fi
 if ! grep -qF 'export PATH="$HOME/bin:$PATH"' "$HOME/.bashrc" 2>/dev/null; then
     printf '\nexport PATH="$HOME/bin:$PATH"\n' >> "$HOME/.bashrc"
 fi
@@ -57,13 +64,13 @@ fi
 cat >> "$TMP_AGENTS" <<'AGENT_BLOCK'
 
 <!-- phone-control -->
-For Android tasks, prioritize completion over narration. Read ~/.config/opencode/skills/android/phone-control/SKILL.md.
-At the start of a new agent session, if rish is installed, try SESSION_START_WAIT=4 amctl session-start once; reuse the session if active. If it fails, do not retry each task and use the AM fallback.
-Use only selectors confirmed by the current screen. For WhatsApp search, if present in the snapshot, clickid com.whatsapp:id/search_bar_inner_layout (label: "Preguntar a Meta AI o buscar"), not stale menuitem_search.
-Batch dependent actions; use one short wait for the target state, at most one textual snapshot to recover, then verify the final result once. Avoid PNG/screenshots, status/doctor/logs, Python timing, repeated waits and narration in ordinary tasks.
-Never claim success without a result check. If the same action fails twice, stop and explain the blocker. Do not disable the app guard or bypass Android authorization.
-If Accessibility is disconnected, ask the owner to re-enable CostPhone in Android Accessibility settings. If Shizuku is unavailable, ask the owner to start its service and grant permission; do not attempt to bypass authorization.
-Skill file: ~/.config/opencode/skills/android/phone-control/SKILL.md
+For every phone-control task, load the `phone-control` skill before the first amctl call. Read ~/.config/opencode/skills/phone-control/SKILL.md.
+If a target app is known, call `amctl launch <package>` first; it now confirms foreground focus. Never call `waittext` or `snap` while Termux is foreground, because the anti-Termux guard intentionally blocks it.
+If launch reports that the app did not reach foreground, use at most one fresh `amctl snap` to inspect the actual screen; only tap refs from that latest snapshot. Never use sleeps to guess when an app is ready.
+For WhatsApp, use the current screen's `com.whatsapp:id/search_bar_inner_layout` when it appears as "Preguntar a Meta AI o buscar"; do not use stale `menuitem_search`. Search the exact chat name, select its row from the current results, and batch known actions.
+Use one short final verification. Avoid PNG/screenshots, status/doctor/logs, Python timing and verbose reports for ordinary tasks. Don't claim success without visible confirmation; do not repeat a send on timeout.
+Do not disable the guard or bypass Android authorization. If Accessibility is disconnected, ask the owner to re-enable it. If Shizuku is unavailable, ask the owner to start it and grant CostPhone permission.
+Skill file: ~/.config/opencode/skills/phone-control/SKILL.md
 <!-- end phone-control -->
 AGENT_BLOCK
 mv "$TMP_AGENTS" "$AGENTS"
@@ -81,6 +88,7 @@ fi
 
 step "Comprobación final"
 printf '\nActualización instalada.\n'
-printf '1) Reinicia OpenCode para que cargue la skill actualizada.\n'
-printf '2) Si Android desactivó Accesibilidad tras actualizar CostPhone, actívala otra vez en Ajustes → Accesibilidad → CostPhone.\n'
-printf '3) No ejecutes status/doctor/logs en tareas normales; úsalos solo si hay un fallo repetible.\n'
+printf '1) La skill está en la ruta estándar ~/.config/opencode/skills/phone-control/SKILL.md.\n'
+printf '2) Reinicia OpenCode y carga la skill phone-control antes de la primera acción del teléfono.\n'
+printf '3) "amctl launch <paquete>" confirma ahora que la app llegó al primer plano; si no, devuelve error pronto.\n'
+printf '4) No ejecutes status/doctor/logs en tareas normales; úsalos solo si hay un fallo repetible.\n'
