@@ -1,54 +1,49 @@
 ---
 name: phone-control
-description: "Controla Android desde Termux con CostPhone/amctl. Prioriza terminar la tarea con el mínimo de pasos; usa esta skill para WhatsApp y otras apps."
+description: "Control del teléfono Android desde Termux con CostPhone/amctl. Entra a la app objetivo, actúa con selectores accesibles y valida el resultado con pocos pasos."
 ---
 
-# phone-control: ejecutar, no enredarse
+# Phone control — modo rápido
 
-## Regla principal
-Resuelve la petición con el menor número de comandos. No hagas diagnóstico preventivo, no expliques cada paso y no repitas verificaciones que no aportan nada. Usa **IDs/texto y lotes**, no capturas.
+**Objetivo:** terminar la tarea, no narrar ni diagnosticar. Usa el mínimo de llamadas al terminal. No generes capturas ni vuelques árboles por rutina.
 
-## Flujo normal
-1. Abre la app una vez: `amctl launch com.paquete.app`.
-2. Espera una sola señal de que cargó: `amctl waittext "texto visible" 10`.
-3. Si el control tiene ID conocido, úsalo directamente con `clickid`; si no, ejecuta **un solo** `amctl snap` para elegirlo. Usa `snap -a` solo si el snapshot normal no muestra el control.
-4. Agrupa acciones consecutivas en un `amctl batch`. Comprueba el resultado al final, no después de cada toque.
-5. Termina cuando el objetivo esté confirmado. No ejecutes `status`, `doctor`, `logs`, `tree` ni PNG por rutina.
+## Flujo
+1. Abre la app una sola vez con `amctl launch <paquete>` si no está abierta.
+2. Ve directo a un selector conocido (`clickid`, `click`) y agrupa pasos dependientes con `amctl batch`.
+3. Si el selector es desconocido, ejecuta un único `amctl snap`; usa esa referencia enseguida, antes de cambiar de pantalla. Usa `snap -a` solo cuando falte el control.
+4. Espera solo una condición que confirme el objetivo final. No hagas `waittext` después de cada toque.
+5. Si la pantalla cambia inesperadamente, toma una decisión con una sola lectura textual. No repitas el mismo plan ni hagas capturas en cadena.
 
-## Ejemplo: enviar un mensaje
-Si el chat ya está abierto y los IDs de WhatsApp coinciden:
+## Ejemplo de acciones juntas
 
 ```bash
 amctl batch <<'EOF'
 clickid com.whatsapp:id/entry
 type Hola
 clickid com.whatsapp:id/send
-waittext Hola 8
+waittext "Hola" 8
 EOF
 ```
 
-`type` reemplaza el contenido del campo enfocado. Si no escribió, no repitas la secuencia completa: toma **un** snapshot, comprueba el campo/teclado y corrige el selector.
+En `batch`, usa `waittext "texto con espacios" 8` con comillas normales. CostPhone comprueba la app objetivo al inicio del lote y valida en el servicio que no haya cambiado durante su ejecución. Si la validación falla, no sigas enviando acciones.
 
-## Si un paso falla
-- **"No pude determinar la app en primer plano"**: reintenta una sola vez el comando fallido. Si falla otra vez, ejecuta `amctl doctor` una vez y detente según su resultado; no encadenes árboles, capturas y varios diagnósticos.
-- **"Termux está en primer plano" al abrir una app**: `amctl launch` debe poder abrirla desde Termux. No lo sustituyas por comandos arbitrarios ni desactives la guardia.
-- **"Sin elementos interactivos"**: usa `amctl snap -a` una sola vez; luego actúa por el ID o la referencia mostrada.
-- Si un selector conocido falla, cambia a un único snapshot textual. Usa PNG solo si la interfaz no expone el control.
-- No repitas toques, escritura o envíos a ciegas. No sigas intentando más de una alternativa si la misma pantalla no cambia.
+## Selectores y esperas
+- ID conocido: `amctl clickid paquete:id/control`.
+- Texto visible: `amctl click "Buscar"`.
+- Referencia reciente: `amctl tapref @pN`.
+- Campo enfocado: `amctl type "texto"` (reemplaza el contenido).
+- Esperar texto: `amctl waittext "texto" 8`; los árboles se consultan hasta que aparezca.
+- No busques un chat por coordenadas si el texto o la fila son accesibles.
+- Tras un timeout, la pantalla puede ser distinta. No vuelvas a usar referencias antiguas: mira una sola vez el estado y elige el siguiente paso.
 
-## Comandos suficientes para la mayoría de tareas
+## Regla para no perder tiempo
+No uses Python, timestamps, `amctl status`, `doctor`, `logs`, `tree` o PNG para una tarea normal. No abras Termux al final solo para reportar tiempo. Si hay que medir, crea la marca de tiempo antes del flujo y léela una vez al final con una ruta absoluta y válida.
 
-| Necesidad | Comando |
-|---|---|
-| Abrir app | `amctl launch com.paquete.app` |
-| Esperar texto | `amctl waittext "texto" 10` |
-| Ver controles | `amctl snap` |
-| Ver nodos con texto | `amctl snap -a` |
-| Tocar por ID | `amctl clickid paquete:id/control` |
-| Tocar por texto | `amctl click "texto"` |
-| Escribir | `amctl type "texto"` |
-| Agrupar acciones | `amctl batch` |
-| Volver | `amctl back` |
+## Recuperación limitada
+- Si un comando falla por primera vez, prueba una única alternativa basada en el estado observado.
+- Si falla la alternativa, detente y explica el bloqueo. Usa `amctl doctor` solo si parece problema de conexión y `amctl logs` solo para investigar una reproducción.
+- Nunca afirmes que un mensaje se envió sin confirmación visible. Nunca repitas un envío por falta de confirmación; verifica primero para evitar duplicados.
+- No desactives la guardia ni uses comandos de shell arbitrarios para saltártela.
 
-## Conexión
-Shizuku/rish es opcional, no requisito para cada tarea. Usa `amctl status` o `amctl doctor` solo cuando una acción falle como problema de conexión. Si el servicio de CostPhone está desactivado, pide reactivarlo en Ajustes → Accesibilidad; no intentes habilitarlo por código.
+## Diagnóstico solo bajo demanda
+`amctl status` muestra el transporte; `amctl doctor` comprueba respuesta de CostPhone; `amctl logs` exporta el registro. Si Android desactivó Accesibilidad, se debe volver a habilitar manualmente en Ajustes → Accesibilidad → CostPhone.
