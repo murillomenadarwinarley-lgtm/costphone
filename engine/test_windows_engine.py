@@ -119,11 +119,11 @@ class DesktopEngineTests(unittest.TestCase):
         self.assertEqual(contents[1]["data"], "ZmFrZQ==")
 
     def test_ui_automation_selector_requires_stable_identifier(self):
-        self.assertEqual(validate_control_selector({"name": "Save", "control_type": "Button"}), {"name": "Save", "control_type": "Button"})
+        self.assertEqual(validate_control_selector({"name": "Save", "control_type": "Button", "window_handle": 100, "process_id": 22}), {"name": "Save", "control_type": "Button", "window_handle": 100, "process_id": 22})
         with self.assertRaises(EngineError):
-            validate_control_selector({"control_type": "Button"})
+            validate_control_selector({"control_type": "Button", "window_handle": 100, "process_id": 22})
         with self.assertRaises(EngineError):
-            validate_control_selector({"name": "Save", "occurrence": True})
+            validate_control_selector({"name": "Save", "window_handle": 100, "process_id": 22, "occurrence": True})
 
     def test_controls_are_readable_without_input_permission(self):
         adapter = FakeAdapter()
@@ -142,8 +142,8 @@ class DesktopEngineTests(unittest.TestCase):
     def test_ui_control_operations_with_permission(self):
         adapter = FakeAdapter()
         engine = WindowsDesktopEngine(adapter, allow_input=True)
-        self.assertTrue(engine.click_control({"name": "Save", "control_type": "Button"})["ok"])
-        self.assertTrue(engine.set_control_text({"name": "Search", "control_type": "Edit"}, "café")["ok"])
+        self.assertTrue(engine.click_control({"name": "Save", "control_type": "Button", "window_handle": 100, "process_id": 22})["ok"])
+        self.assertTrue(engine.set_control_text({"name": "Search", "control_type": "Edit", "window_handle": 100, "process_id": 22}, "café")["ok"])
         self.assertEqual(adapter.calls[0][0], "click_control")
         self.assertEqual(adapter.calls[1][0], "set_control_text")
         self.assertEqual(adapter.calls[1][2], "café")
