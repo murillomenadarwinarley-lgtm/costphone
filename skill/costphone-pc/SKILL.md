@@ -9,18 +9,20 @@ This MCP controls the Windows desktop on the same PC where OpenCode is running. 
 
 ## Safe interaction loop
 
-1. Call desktop_inspect to identify the foreground application, then desktop_screenshot to see the current visible UI.
-2. Interpret only what is visible in the latest screenshot. If the window or its content is unclear, take another screenshot before acting.
-3. For app launches, use desktop_launch_app with one concrete .exe (no arguments). For a web page, use desktop_open_url with a complete HTTP/HTTPS URL.
-4. Keyboard and mouse tools may be disabled unless the user explicitly enabled input during installation. If a tool returns input_disabled, stop and explain that permission is disabled; do not work around it.
-5. Before desktop_click, use the latest screenshot and choose coordinates that clearly match the intended control. After each click, typing action, or key press, inspect the result again. Never replay an action blindly after a timeout or uncertain result.
-6. Confirm the focused input before desktop_type_text. This tool temporarily uses the clipboard to paste Unicode text and restores the previous text clipboard when possible.
-7. Before an action that could send/post a message, delete or publish information, submit a form, purchase something, or commit an external change, explain the intended outcome and obtain the user's confirmation. Enter can submit forms and messages; do not press it merely to dismiss uncertainty.
-8. Do not infer an external outcome from a click or key press alone. Verify visible confirmation where possible and describe uncertainty honestly.
+1. Call desktop_inspect to identify the foreground application, then call desktop_inspect_controls to read its visible Windows UI Automation controls. Use desktop_screenshot when labels are unclear, a control is not exposed, or you need visual context.
+2. Prefer desktop_inspect_controls selectors (name, automation_id, control_type, occurrence) to coordinate clicking. A selector is fresh only for the current foreground window; if a control is not found or the app changes, inspect the window and controls again.
+3. Use desktop_click_control for an exact UI Automation target. If the application exposes no usable controls, fall back to desktop_screenshot followed by desktop_click at coordinates from that recent screenshot.
+4. Use desktop_set_control_text only for controls Windows identifies as Edit fields. It requires explicit input permission and refuses elements identified as password fields. Confirm that the target field is correct before writing.
+5. For generic typing, desktop_type_text pastes Unicode text to the focused control. Verify the focused field before using it. The previous clipboard text is restored when possible.
+6. For app launches, use desktop_launch_app with one concrete .exe (no arguments). For a web page, use desktop_open_url with a complete HTTP/HTTPS URL.
+7. Keyboard/mouse and UI control changes may be disabled unless the user explicitly enabled input during installation. If a tool returns input_disabled, stop and explain that permission is disabled; do not work around it.
+8. After every click, typing action, or key press, inspect the state again. Never replay an action blindly after a timeout or uncertain result.
+9. Before an action that could send/post a message, delete or publish information, submit a form, purchase something, or commit an external change, explain the intended outcome and obtain the user's confirmation. Enter can submit forms and messages; do not press it merely to dismiss uncertainty.
+10. Do not infer an external outcome from a click or key press alone. Verify visible confirmation where possible and describe uncertainty honestly.
 
 ## Limits
 
-- desktop_inspect reports window/process metadata, not text inside the application.
-- desktop_screenshot returns a screenshot image. Do not capture or expose information that is not needed for the task.
-- This initial Windows implementation does not have Android's accessibility tree, amctl, display isolation, or automatic OCR.
+- desktop_inspect reports window/process metadata. desktop_inspect_controls reads visible controls exposed by Windows UI Automation, but some apps (games, remote desktops, custom-rendered surfaces, elevated windows, etc.) expose few or no useful controls.
+- desktop_screenshot returns an image for visual interpretation. Do not capture or expose information that is not needed for the task.
+- The native Windows engine does not have Android amctl, Android-only permissions, or the isolated virtual display implementation.
 - The active, unlocked Windows desktop is required; a locked screen or logged-off session is not a supported automation target.
