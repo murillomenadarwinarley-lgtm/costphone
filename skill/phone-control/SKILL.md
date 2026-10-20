@@ -22,6 +22,19 @@ Las refs se asignan frescas en cada `snap` y **quedan obsoletas en cuanto la
 pantalla cambia** (navegar, abrir un diálogo, teclado, etc.). Antes de cada
 acción por ref: re-snapshot.
 
+## Modo rápido: menos esperas y menos tokens
+
+Para tareas normales, sigue este orden y no hagas inspección redundante:
+
+1. Si conoces con certeza la app de destino, lánzala por paquete y espera solo lo necesario para que abra.
+2. Toma un `amctl snap` y decide a partir de los elementos accesibles; no pidas también `tree` y `see` salvo que falte información.
+3. Encadena acciones seguras en la misma pantalla cuando el objetivo ya está identificado. Repite el snapshot tras cambiar de pantalla, abrir un diálogo, mostrar el teclado o desplazarte.
+4. Si un comando falla, inspecciona una vez el estado actual y corrige; no repitas a ciegas la misma acción ni añadas esperas largas por defecto.
+5. Usa el modelo rápido/razonamiento bajo para instrucciones claras. Cambia a un modelo de razonamiento más fuerte solo si la petición es ambigua, hay varios caminos posibles o la verificación falla.
+6. No uses `amctl tree` para sustituir un snapshot simple. Recurre a `tree` para depurar una pantalla cuando `snap` no incluya el dato necesario y a `see` cuando haga falta contexto visual.
+
+Antes de enviar mensajes, publicar, eliminar datos o confirmar acciones externas, valida el destinatario/objetivo y pide confirmación cuando corresponda. El modo rápido no elimina la verificación de acciones importantes.
+
 ## Leer la pantalla
 
 | Comando | Qué hace |
