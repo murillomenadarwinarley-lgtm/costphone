@@ -35,6 +35,10 @@ class FakeAdapter:
         self.calls.append(("click", x, y))
         return {"x": x, "y": y, "clicked": True}
 
+    def drag(self, start_x, start_y, end_x, end_y, duration_ms):
+        self.calls.append(("drag", start_x, start_y, end_x, end_y, duration_ms))
+        return {"start_x": start_x, "start_y": start_y, "end_x": end_x, "end_y": end_y, "duration_ms": duration_ms, "dragged": True}
+
     def scroll(self, x, y, clicks):
         self.calls.append(("scroll", x, y, clicks))
         return {"x": x, "y": y, "clicks": clicks, "scrolled": True}
@@ -54,6 +58,10 @@ class FakeAdapter:
     def click_control(self, selector):
         self.calls.append(("click_control", selector))
         return {"clicked": True, "control": {"name": "Save", "control_type": "Button"}}
+
+    def double_click_control(self, selector):
+        self.calls.append(("double_click_control", selector))
+        return {"double_clicked": True, "control": {"name": "Folder", "control_type": "ListItem"}}
 
     def set_control_text(self, selector, text):
         self.calls.append(("set_control_text", selector, text))
@@ -120,6 +128,20 @@ class DesktopEngineTests(unittest.TestCase):
             disabled.scroll(10, 10, 1)
         self.assertEqual(ctx.exception.code, "input_disabled")
 
+    def test_drag_checks_permission_bounds_and_duration(self):
+        adapter = FakeAdapter()
+        engine = WindowsDesktopEngine(adapter, allow_input=True)
+        self.assertTrue(engine.drag(20, 30, 200, 300, 500)["ok"])
+        self.assertEqual(adapter.calls[-1], ("drag", 20, 30, 200, 300, 500))
+        with self.assertRaises(EngineError):
+            engine.drag(0, 0, 1920, 100, 500)
+        with self.assertRaises(EngineError):
+            engine.drag(0, 0, 10, 10, 99)
+        disabled = WindowsDesktopEngine(FakeAdapter(), allow_input=False)
+        with self.assertRaises(EngineError) as ctx:
+            disabled.drag(0, 0, 10, 10, 500)
+        self.assertEqual(ctx.exception.code, "input_disabled")
+
     def test_text_and_key_allowlist(self):
         adapter = FakeAdapter()
         engine = WindowsDesktopEngine(adapter, allow_input=True)
@@ -183,9 +205,20 @@ class DesktopEngineTests(unittest.TestCase):
             disabled.set_control_checked({"name": "Remember me", "window_handle": 100, "process_id": 22}, False)
         self.assertEqual(ctx.exception.code, "input_disabled")
 
+    def test_double_click_control_requires_permission_and_window_bound_selector(self):
+        adapter = FakeAdapter()
+        engine = WindowsDesktopEngine(adapter, allow_input=True)
+        selector = {"name": "Folder", "control_type": "ListItem", "window_handle": 100, "process_id": 22}
+        self.assertTrue(engine.double_click_control(selector)["ok"])
+        self.assertEqual(adapter.calls[-1], ("double_click_control", selector))
+        disabled = WindowsDesktopEngine(FakeAdapter(), allow_input=False)
+        with self.assertRaises(EngineError) as ctx:
+            disabled.double_click_control(selector)
+        self.assertEqual(ctx.exception.code, "input_disabled")
+
     def test_mcp_tools_and_unknown_tool(self):
         names = {tool["name"] for tool in TOOLS}
-        self.assertEqual(names, {"desktop_inspect", "desktop_screenshot", "desktop_launch_app", "desktop_open_url", "desktop_click", "desktop_scroll", "desktop_type_text", "desktop_press_key", "desktop_inspect_controls", "desktop_click_control", "desktop_set_control_text", "desktop_set_control_checked"})
+        self.assertEqual(names, {"desktop_inspect", "desktop_screenshot", "desktop_launch_app", "desktop_open_url", "desktop_click", "desktop_scroll", "desktop_drag", "desktop_type_text", "desktop_press_key", "desktop_inspect_controls", "desktop_click_control", "desktop_double_click_control", "desktop_set_control_text", "desktop_set_control_checked"})
         response = dispatch("tools/call", {"name": "not_a_tool", "arguments": {}}, WindowsDesktopEngine(FakeAdapter()))
         self.assertEqual(response["error"]["code"], -32602)
 
