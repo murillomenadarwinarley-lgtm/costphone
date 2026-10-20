@@ -167,16 +167,29 @@ public class AccessibilityServiceImpl extends AccessibilityService {
             @Override
             public void onReceive(Context context, Intent intent) {
                 final Intent command = new Intent(intent);
+                final long queuedAt = android.os.SystemClock.elapsedRealtime();
                 try {
                     commandExecutor.execute(new Runnable() {
                         @Override
                         public void run() {
+                            final long startedAt = android.os.SystemClock.elapsedRealtime();
+                            long queueWait = startedAt - queuedAt;
+                            if (queueWait >= 300L) {
+                                ConnectionLog.add("PERF command=" + command.getAction()
+                                        + " queue_wait_ms=" + queueWait);
+                            }
                             try {
                                 handleCommand(command);
                             } catch (Throwable e) {
                                 Log.e(TAG, "Error procesando comando " + command.getAction(), e);
                                 ConnectionLog.add("COMMAND exception action=" + command.getAction()
                                         + " type=" + e.getClass().getSimpleName());
+                            } finally {
+                                long total = android.os.SystemClock.elapsedRealtime() - queuedAt;
+                                if (total >= 700L) {
+                                    ConnectionLog.add("PERF command=" + command.getAction()
+                                            + " total_ms=" + total);
+                                }
                             }
                         }
                     });
@@ -281,8 +294,8 @@ public class AccessibilityServiceImpl extends AccessibilityService {
             try { unregisterReceiver(receiver); } catch (Throwable ignored) { }
             receiver = null;
         }
-        try { KeepAliveService.stop(this); } catch (Throwable ignored) { }
-        try { ConnectionLog.add("Servicio de accesibilidad desvinculado"); } catch (Throwable ignored) { }
+        try { KeepAliveService.stopIfAccessibilityDisabled(this); } catch (Throwable ignored) { }
+        try { ConnectionLog.add("Servicio de accesibilidad desvinculado; keep-alive en comprobación diferida"); } catch (Throwable ignored) { }
         return super.onUnbind(intent);
     }
 
@@ -294,8 +307,8 @@ public class AccessibilityServiceImpl extends AccessibilityService {
         commandExecutor.shutdownNow();
         // Shizuku tiene ciclo de vida propio; no desconectarlo al reparar Accesibilidad.
         super.onDestroy();
-        KeepAliveService.stop(this);
-        ConnectionLog.add("Servicio de accesibilidad desconectado");
+        KeepAliveService.stopIfAccessibilityDisabled(this);
+        ConnectionLog.add("Servicio de accesibilidad destruido; keep-alive en comprobación diferida");
         sInstance = null;
     }
 
