@@ -89,6 +89,12 @@ def validate_scroll(value: Any) -> int:
     return value
 
 
+def validate_duration(value: Any) -> int:
+    if type(value) is not int or not 100 <= value <= 2500:
+        raise EngineError("invalid_duration", "duration_ms debe ser un entero entre 100 y 2500.")
+    return value
+
+
 def validate_control_selector(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise EngineError("invalid_selector", "selector debe ser un objeto con name y/o automation_id.")
@@ -368,6 +374,17 @@ class WindowsDesktopAdapter:
             raise EngineError("control_click_failed", "No se pudo hacer clic en el control. Inspecciona la ventana de nuevo; no se repetirá la acción.", {"control": details, "reason": str(exc)[:300]}) from exc
         return {"clicked": True, "control": details}
 
+    def double_click_control(self, selector: dict[str, Any]) -> dict[str, Any]:
+        self._require_windows()
+        control, details = self._resolve_control(selector)
+        if not details["enabled"]:
+            raise EngineError("control_disabled", "Windows indica que el control está deshabilitado.", {"control": details})
+        try:
+            control.double_click_input()
+        except Exception as exc:
+            raise EngineError("control_double_click_failed", "No se pudo completar el doble clic. Inspecciona la ventana de nuevo; no se repetirá la acción.", {"control": details, "reason": str(exc)[:300]}) from exc
+        return {"double_clicked": True, "control": details}
+
     def set_control_checked(self, selector: dict[str, Any], checked: bool) -> dict[str, Any]:
         self._require_windows()
         if type(checked) is not bool:
@@ -457,6 +474,25 @@ class WindowsDesktopAdapter:
         self._pyautogui().scroll(clicks, x=x, y=y)
         return {"x": x, "y": y, "clicks": clicks, "scrolled": True}
 
+    def drag(self, start_x: int, start_y: int, end_x: int, end_y: int, duration_ms: int) -> dict[str, Any]:
+        self._require_windows()
+        pyautogui = self._pyautogui()
+        mouse_down = False
+        try:
+            pyautogui.moveTo(start_x, start_y)
+            pyautogui.mouseDown(button="left")
+            mouse_down = True
+            pyautogui.moveTo(end_x, end_y, duration=duration_ms / 1000.0)
+        except Exception as exc:
+            raise EngineError("drag_failed", "No se pudo completar el arrastre. Se soltará el botón del ratón y no se repetirá la acción.", {"reason": str(exc)[:300]}) from exc
+        finally:
+            if mouse_down:
+                try:
+                    pyautogui.mouseUp(button="left")
+                except Exception:
+                    pass
+        return {"start_x": start_x, "start_y": start_y, "end_x": end_x, "end_y": end_y, "duration_ms": duration_ms, "dragged": True}
+
     def type_text(self, text: str) -> dict[str, Any]:
         self._require_windows()
         pyautogui = self._pyautogui()
@@ -513,6 +549,10 @@ class WindowsDesktopEngine:
         self._require_input()
         return {"ok": True, **self.adapter.click_control(validate_control_selector(selector))}
 
+    def double_click_control(self, selector: Any) -> dict[str, Any]:
+        self._require_input()
+        return {"ok": True, **self.adapter.double_click_control(validate_control_selector(selector))}
+
     def set_control_text(self, selector: Any, text: Any) -> dict[str, Any]:
         self._require_input()
         return {"ok": True, **self.adapter.set_control_text(validate_control_selector(selector), validate_text(text))}
@@ -560,6 +600,21 @@ class WindowsDesktopEngine:
         if x >= width or y >= height:
             raise EngineError("invalid_coordinates", "El punto de scroll queda fuera de la pantalla activa.", {"screen_width": width, "screen_height": height})
         return {"ok": True, **self.adapter.scroll(x, y, clicks)}
+
+    def drag(self, start_x: Any, start_y: Any, end_x: Any, end_y: Any, duration_ms: Any = 500) -> dict[str, Any]:
+        self._require_input()
+        start_x = validate_coordinate(start_x, "start_x")
+        start_y = validate_coordinate(start_y, "start_y")
+        end_x = validate_coordinate(end_x, "end_x")
+        end_y = validate_coordinate(end_y, "end_y")
+        duration_ms = validate_duration(duration_ms)
+        window = self.adapter.inspect()
+        width, height = window.get("screen_width"), window.get("screen_height")
+        if not isinstance(width, int) or not isinstance(height, int) or width <= 0 or height <= 0:
+            raise EngineError("screen_unknown", "No pude verificar la resolución de la pantalla.")
+        if any(x >= width for x in (start_x, end_x)) or any(y >= height for y in (start_y, end_y)):
+            raise EngineError("invalid_coordinates", "El arrastre queda fuera de la pantalla activa.", {"screen_width": width, "screen_height": height})
+        return {"ok": True, **self.adapter.drag(start_x, start_y, end_x, end_y, duration_ms)}
 
     def type_text(self, text: Any) -> dict[str, Any]:
         self._require_input()
