@@ -19,7 +19,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 from urllib.parse import urlparse
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 PACKAGE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+$")
 HEADER_RE = re.compile(r"^Pantalla(?:\s+—\s+display\s+\d+)?:\s*([^\s—]+)\s+—", re.MULTILINE)
 RISK_RE = re.compile(

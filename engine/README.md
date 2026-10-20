@@ -1,4 +1,4 @@
-# CostPhone Engine 0.1.0
+# CostPhone Engine 0.1.1
 
 CostPhone Engine is an **additive, opt-in orchestration layer** above the existing amctl CLI. It does not replace the Android APK, Accessibility service, Shizuku transport, updater, or existing phone-control skill. It uses only Python's standard library and invokes amctl with argument arrays; it never evaluates task text as shell commands.
 
