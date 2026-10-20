@@ -9,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from costphone_engine import (  # noqa: E402
+    AmctlAdapter,
     CostPhoneEngine,
     EngineError,
     Snapshot,
@@ -87,6 +88,37 @@ class EngineValidationTests(unittest.TestCase):
         with self.assertRaises(EngineError) as ctx:
             validate_plan(plan)
         self.assertIn(ctx.exception.code, {"unsupported_action", "invalid_plan"})
+
+    def test_rejects_later_action_without_fresh_context(self):
+        plan = simple_plan()
+        plan["steps"][0]["actions"] = [
+            {"kind": "click_text", "value": "Settings"},
+            {"kind": "click_text", "value": "Network"},
+        ]
+        with self.assertRaises(EngineError) as ctx:
+            validate_plan(plan)
+        self.assertEqual(ctx.exception.code, "invalid_plan")
+
+    def test_accepts_later_action_with_fresh_context(self):
+        plan = simple_plan()
+        plan["steps"][0]["actions"] = [
+            {"kind": "click_text", "value": "Settings"},
+            {"kind": "click_text", "value": "Network", "requires": ["Settings"]},
+        ]
+        validated = validate_plan(plan)
+        self.assertEqual(validated["action_count"], 2)
+
+    def test_parse_package_accepts_and_blocks_screen_states(self):
+        self.assertEqual(
+            AmctlAdapter.parse_package("Pantalla: com.whatsapp — 8 elementos (todos)"),
+            "com.whatsapp",
+        )
+        with self.assertRaises(EngineError) as blocked:
+            AmctlAdapter.parse_package("Pantalla: Termux — bloqueada")
+        self.assertEqual(blocked.exception.code, "screen_blocked")
+        with self.assertRaises(EngineError) as unknown:
+            AmctlAdapter.parse_package("not a screen snapshot")
+        self.assertEqual(unknown.exception.code, "unknown_screen")
 
     def test_sensitive_actions_are_detected(self):
         self.assertTrue(is_external_effect({"kind": "click_id", "value": "com.whatsapp:id/send"}))
