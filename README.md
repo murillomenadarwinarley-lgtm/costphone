@@ -200,8 +200,8 @@ Los íconos se regeneran del logo con `python3 gen-icons.py`
   reactívalo. **El APK no está corrupto.**
 - **MIUI/HyperOS apaga el servicio solo** → activa Termux y CostPhone en
   *Autostart* y quítales la optimización de batería.
-- **CostPhone se desconecta al pasar a segundo plano** → actualiza a v1.6.8, revisa que Accesibilidad siga activa y que la notificación persistente esté presente. Excluye CostPhone y Termux del ahorro de batería; en MIUI/HyperOS activa *Inicio automático*.
-- **Lag / comandos tardíos** → v1.6.8 envía toques y teclas por la API local de Accesibilidad (sin esperar un IPC de Shizuku), separa capturas/árboles de la cola interactiva, descarta órdenes interactivas obsoletas y limita los nodos visitados. Revisa `PERF command=` y `QUEUE busy` con `amctl logs`.
+- **CostPhone se desconecta al pasar a segundo plano** → actualiza a v1.7.0, revisa que Accesibilidad siga activa y que la notificación persistente esté presente. Excluye CostPhone y Termux del ahorro de batería; en MIUI/HyperOS activa *Inicio automático*.
+- **Lag / falsos bloqueos** → v1.7.0 separa la lectura de la app activa de capturas y árboles, y permite abrir apps desde Termux sin saltarse la guardia de toques/escritura. Usa `amctl doctor` o `amctl logs` solo si el mismo fallo se repite.
 - **Forzar detención** desde Ajustes detiene los servicios por diseño de Android; es necesario abrir CostPhone otra vez.
 
 ## Seguridad
@@ -230,10 +230,11 @@ Los íconos se regeneran del logo con `python3 gen-icons.py`
 - Licencia: **MIT** — ver [LICENSE](LICENSE).
 
 
-## Rendimiento y accesibilidad (v1.6.8)
+## Rendimiento y accesibilidad (v1.7.0)
 
-- Los toques y teclas usan la API nativa de Accesibilidad en el teléfono; Shizuku se conserva para operaciones avanzadas, pero un IPC lento no retiene la cola de gestos.
-- Capturas, volcados del árbol y diagnósticos se aíslan de los comandos interactivos. Las búsquedas y el árbol tienen límites de nodos para evitar explorar jerarquías enormes indefinidamente.
+- Toques y teclas usan Shizuku como vía preferida cuando está conectado y Accesibilidad como fallback; las llamadas siguen siendo asíncronas.
+- Las acciones, la consulta de la app activa y los diagnósticos pesados usan colas separadas. Así, capturas/árboles no deberían bloquear la guardia ni retrasar un lote normal.
+- La guía para el agente prioriza IDs/texto, un único snapshot cuando hace falta y lotes cortos; no se recomiendan diagnósticos ni capturas después de cada toque.
 - La aplicación no escribe en `ENABLED_ACCESSIBILITY_SERVICES` ni puede reactivar el permiso por su cuenta. Si Android lo deshabilita durante una instalación/actualización, vuelve a activarlo manualmente en Ajustes → Accesibilidad → CostPhone; no borres los datos de la app.
 
 - **Restauración de funcionalidad (1.6.9)** → Shizuku vuelve a ser el backend preferido para toques/teclas cuando ya está conectado; Accesibilidad queda como fallback inmediato. No se eliminan ni se reescriben preferencias de accesibilidad.
