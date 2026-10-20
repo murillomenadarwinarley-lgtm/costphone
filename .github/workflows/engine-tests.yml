@@ -95,10 +95,11 @@ jobs:
           PY
       - name: Native Windows MCP protocol smoke test
         run: |
-          printf '%s\\n' \\
-            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05"}}' \\
-            '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \\
-            | python engine/windows_mcp_server.py > /tmp/costphone-pc-mcp.jsonl
+          python - <<'PY' | python engine/windows_mcp_server.py > /tmp/costphone-pc-mcp.jsonl
+          import json
+          print(json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05"}}))
+          print(json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}))
+          PY
           python - <<'PY'
           import json
           with open("/tmp/costphone-pc-mcp.jsonl", encoding="utf-8") as fh:
