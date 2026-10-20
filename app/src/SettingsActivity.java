@@ -4,10 +4,17 @@ import android.accessibilityservice.AccessibilityServiceInfo;
 import android.app.Activity;
 import android.content.ClipData;
 import android.content.ClipboardManager;
+import android.content.ComponentName;
 import android.content.Intent;
+import android.content.ServiceConnection;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.os.IBinder;
+import android.os.RemoteException;
+import android.net.Uri;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
@@ -20,6 +27,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.List;
+
+import rikka.shizuku.Shizuku;
 
 /**
  * CostPhone — interfaz nativa con navegación inferior.
@@ -45,9 +54,9 @@ public class SettingsActivity extends Activity {
 
     private FrameLayout contentFrame;
     private LinearLayout bottomNav;
-    private final View[] navItems = new View[5];
-    private final ImageView[] navIcons = new ImageView[5];
-    private final TextView[] navLabels = new TextView[5];
+    private final View[] navItems = new View[3];
+    private final ImageView[] navIcons = new ImageView[3];
+    private final TextView[] navLabels = new TextView[3];
     private int currentTab = 0;
 
     private LinearLayout headerStatusPill;
@@ -61,14 +70,86 @@ public class SettingsActivity extends Activity {
     private LinearLayout actionButton;
     private TextView actionLabel;
 
+    private static final int SHIZUKU_PERMISSION_REQUEST = 5412;
+    private static final int VDISPLAY_WIDTH = 1080;
+    private static final int VDISPLAY_HEIGHT = 1920;
+    private static final int VDISPLAY_DENSITY = 320;
+    private static final String SHIZUKU_PREFS = "costphone_connection";
+    private static final String PREF_VDISPLAY_OWNED = "shizuku_virtual_display_owned";
+
+    private TextView shizukuStatusTitle;
+    private TextView shizukuStatusDescription;
+    private TextView shizukuDiagnostics;
+    private View shizukuStatusDot;
+    private LinearLayout shizukuActionButton;
+    private TextView shizukuActionLabel;
+    private LinearLayout virtualDisplayOnButton;
+    private TextView virtualDisplayOnLabel;
+    private LinearLayout virtualDisplayOffButton;
+    private TextView virtualDisplayOffLabel;
+    private ICostPhoneShizukuService shizukuService;
+    private boolean shizukuServiceBound;
+    private Shizuku.UserServiceArgs shizukuServiceArgs;
+
+    private final Shizuku.OnBinderReceivedListener shizukuBinderReceivedListener =
+            () -> runOnUiThread(this::refreshShizukuStatus);
+    private final Shizuku.OnBinderDeadListener shizukuBinderDeadListener = () ->
+            runOnUiThread(() -> {
+                shizukuService = null;
+                shizukuServiceBound = false;
+                refreshShizukuStatus();
+            });
+    private final Shizuku.OnRequestPermissionResultListener shizukuPermissionResultListener =
+            (requestCode, grantResult) -> runOnUiThread(() -> {
+                if (requestCode != SHIZUKU_PERMISSION_REQUEST) return;
+                if (grantResult == PackageManager.PERMISSION_GRANTED) {
+                    bindShizukuUserService();
+                } else {
+                    Toast.makeText(this, "Permiso de Shizuku denegado", Toast.LENGTH_SHORT).show();
+                }
+                refreshShizukuStatus();
+            });
+
+    private final ServiceConnection shizukuServiceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            shizukuService = ICostPhoneShizukuService.Stub.asInterface(service);
+            shizukuServiceBound = true;
+            refreshShizukuStatus();
+            final ICostPhoneShizukuService remote = shizukuService;
+            new Thread(() -> {
+                final String report;
+                try {
+                    report = remote.getDiagnostics();
+                } catch (RemoteException | RuntimeException e) {
+                    runOnUiThread(() -> {
+                        if (shizukuDiagnostics != null) {
+                            shizukuDiagnostics.setText("Conectado, pero no se pudo leer el diagnóstico: " + e.getMessage());
+                        }
+                    });
+                    return;
+                }
+                runOnUiThread(() -> {
+                    if (shizukuDiagnostics != null) shizukuDiagnostics.setText(report);
+                    refreshShizukuStatus();
+                });
+            }, "CostPhone-Shizuku-Diagnostics").start();
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            shizukuService = null;
+            shizukuServiceBound = false;
+            refreshShizukuStatus();
+        }
+    };
+
     private static final String[] NAV_LABELS = {
-            "Inicio", "Control", "Inspector", "Rutinas", "Ajustes"
+            "Inicio", "Herramientas", "Conexión"
     };
     private static final int[] NAV_ICONS = {
             R.drawable.ic_home,
-            R.drawable.ic_control,
-            R.drawable.ic_inspect,
-            R.drawable.ic_routines,
+            R.drawable.ic_terminal,
             R.drawable.ic_settings
     };
 
@@ -83,6 +164,9 @@ public class SettingsActivity extends Activity {
 
         LinearLayout root = buildShell();
         setContentView(root);
+        Shizuku.addBinderReceivedListenerSticky(shizukuBinderReceivedListener);
+        Shizuku.addBinderDeadListener(shizukuBinderDeadListener);
+        Shizuku.addRequestPermissionResultListener(shizukuPermissionResultListener);
         showTab(0);
     }
 
@@ -90,6 +174,22 @@ public class SettingsActivity extends Activity {
     protected void onResume() {
         super.onResume();
         refreshStatus();
+        refreshShizukuStatus();
+    }
+
+    @Override
+    protected void onDestroy() {
+        Shizuku.removeBinderReceivedListener(shizukuBinderReceivedListener);
+        Shizuku.removeBinderDeadListener(shizukuBinderDeadListener);
+        Shizuku.removeRequestPermissionResultListener(shizukuPermissionResultListener);
+        try {
+            if (shizukuServiceBound && shizukuServiceArgs != null && Shizuku.pingBinder()) {
+                Shizuku.unbindUserService(shizukuServiceArgs, shizukuServiceConnection, true);
+            }
+        } catch (Throwable ignored) {
+            // The Shizuku binder can disappear while Android is destroying the activity.
+        }
+        super.onDestroy();
     }
 
     private LinearLayout buildShell() {
@@ -149,7 +249,7 @@ public class SettingsActivity extends Activity {
     }
 
     private void showTab(int tab) {
-        currentTab = Math.max(0, Math.min(4, tab));
+        currentTab = Math.max(0, Math.min(2, tab));
 
         // Clear references to views on the previous page before rebuilding the next one.
         headerStatusPill = null;
@@ -162,13 +262,21 @@ public class SettingsActivity extends Activity {
         serviceDescription = null;
         actionButton = null;
         actionLabel = null;
+        shizukuStatusTitle = null;
+        shizukuStatusDescription = null;
+        shizukuDiagnostics = null;
+        shizukuStatusDot = null;
+        shizukuActionButton = null;
+        shizukuActionLabel = null;
+        virtualDisplayOnButton = null;
+        virtualDisplayOnLabel = null;
+        virtualDisplayOffButton = null;
+        virtualDisplayOffLabel = null;
 
         View page;
         switch (currentTab) {
-            case 1: page = buildControlPage(); break;
-            case 2: page = buildInspectorPage(); break;
-            case 3: page = buildRoutinesPage(); break;
-            case 4: page = buildSettingsPage(); break;
+            case 1: page = buildToolsPage(); break;
+            case 2: page = buildConnectionPage(); break;
             default: page = buildHomePage(); break;
         }
 
@@ -178,6 +286,7 @@ public class SettingsActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT));
         updateNavigation();
         refreshStatus();
+        refreshShizukuStatus();
     }
 
     private void updateNavigation() {
@@ -226,24 +335,18 @@ public class SettingsActivity extends Activity {
 
         page.addView(buildFeatureCard(
                 R.drawable.ic_terminal,
-                "Control del dispositivo",
-                "Comandos para abrir apps, tocar, deslizar y escribir desde Termux.",
+                "Herramientas rápidas",
+                "Lee la pantalla, obtén referencias y copia solo los comandos que necesitas.",
                 CYAN, 1), topMargin(match(), 11));
 
         page.addView(buildFeatureCard(
-                R.drawable.ic_inspect,
-                "Inspector de pantalla",
-                "Consulta elementos, referencias interactivas y capturas.",
+                R.drawable.ic_settings,
+                "Conexiones del dispositivo",
+                "Comprueba Accesibilidad y conecta Shizuku para las operaciones avanzadas compatibles.",
                 0xFF9A9EFF, 2), topMargin(match(), 9));
 
-        page.addView(buildFeatureCard(
-                R.drawable.ic_routines,
-                "Rutinas y secuencias",
-                "Plantillas de comandos que puedes copiar y ejecutar en Termux.",
-                TEAL, 3), topMargin(match(), 9));
-
         TextView footer = text(
-                "COSTPHONE  ·  V1.2\nControl local para Android, junto a Termux.",
+                "COSTPHONE  ·  V1.3\nControl local para Android, junto a Termux.",
                 10, TEXT_SOFT, false);
         footer.setGravity(Gravity.CENTER);
         footer.setLineSpacing(dp(4), 1f);
@@ -383,165 +486,462 @@ public class SettingsActivity extends Activity {
         return orb;
     }
 
-    // ─────────────────────────── CONTROL ──────────────────────────────
+    // ───────────────────────── HERRAMIENTAS ───────────────────────────
 
-    private View buildControlPage() {
+    private View buildToolsPage() {
         ScrollView scroll = newPage();
         LinearLayout page = pageContent(scroll);
         page.addView(buildPageHeader(
-                R.drawable.ic_control, "Control", "Comandos del teléfono", CYAN));
+                R.drawable.ic_terminal, "Herramientas", "Las acciones que más se usan", CYAN));
 
         page.addView(buildNotice(
-                "LOS COMANDOS SE COPIAN",
-                "Estas acciones son ejemplos listos para copiar. Pégalos en Termux para ejecutarlos; esta pantalla no envía comandos directamente.",
-                R.drawable.ic_clipboard, CYAN), topMargin(match(), 16));
+                "CÓPIA Y EJECUTA EN TERMUX",
+                "CostPhone muestra comandos reales de amctl. Estos botones copian el comando; la ejecución sigue ocurriendo en Termux.",
+                R.drawable.ic_clipboard, CYAN), topMargin(match(), 14));
 
-        page.addView(sectionLabel("ACCIONES DISPONIBLES"), topMargin(wrap(), 24));
-        page.addView(buildCommandCard(
-                R.drawable.ic_display, CYAN,
-                "Abrir una aplicación",
-                "Inicia una app por su identificador de paquete.",
-                "amctl launch com.android.settings",
-                "Copiar comando"), topMargin(match(), 11));
-
-        page.addView(buildCommandCard(
-                R.drawable.ic_control, 0xFF8B9CFF,
-                "Tocar la pantalla",
-                "Ejemplo de toque por coordenadas. Ajusta X e Y a tu pantalla.",
-                "amctl tap 540 960",
-                "Copiar comando"), topMargin(match(), 10));
-
-        page.addView(buildCommandCard(
-                R.drawable.ic_inspect, TEAL,
-                "Deslizar el contenido",
-                "Ejemplo de gesto vertical; adapta las coordenadas a tu dispositivo.",
-                "amctl swipe 540 1800 540 600",
-                "Copiar comando"), topMargin(match(), 10));
-
-        page.addView(buildCommandCard(
-                R.drawable.ic_terminal, CYAN,
-                "Escribir texto",
-                "Primero enfoca un campo de texto en la aplicación de destino.",
-                "amctl type \"Hola desde CostPhone\"",
-                "Copiar comando"), topMargin(match(), 10));
-
-        return scroll;
-    }
-
-    // ────────────────────────── INSPECTOR ─────────────────────────────
-
-    private View buildInspectorPage() {
-        ScrollView scroll = newPage();
-        LinearLayout page = pageContent(scroll);
-        page.addView(buildPageHeader(
-                R.drawable.ic_inspect, "Inspector", "Comprende la pantalla", 0xFF9A9EFF));
-
-        page.addView(buildNotice(
-                "OBSERVA ANTES DE ACTUAR",
-                "Usa un snapshot para encontrar referencias interactivas. Después de cambiar de pantalla, vuelve a tomarlo: las referencias anteriores pueden dejar de ser válidas.",
-                R.drawable.ic_sparkles, 0xFF9A9EFF), topMargin(match(), 16));
-
-        page.addView(sectionLabel("HERRAMIENTAS DE INSPECCIÓN"), topMargin(wrap(), 24));
+        page.addView(sectionLabel("INSPECCIÓN Y CONTROL"), topMargin(wrap(), 20));
         page.addView(buildCommandCard(
                 R.drawable.ic_inspect, 0xFF9A9EFF,
-                "Snapshot interactivo",
-                "Obtén elementos interactivos con referencias @pN.",
-                "amctl snap", "Copiar comando"), topMargin(match(), 11));
-
-        page.addView(buildCommandCard(
-                R.drawable.ic_terminal, CYAN,
-                "Árbol completo de interfaz",
-                "Lee la estructura accesible de la pantalla actual.",
-                "amctl tree", "Copiar comando"), topMargin(match(), 10));
+                "Leer pantalla interactiva",
+                "Obtén referencias @pN para tocar botones y campos sin usar coordenadas.",
+                "amctl snap", "Copiar comando"), topMargin(match(), 10));
 
         page.addView(buildCommandCard(
                 R.drawable.ic_display, TEAL,
-                "Captura de pantalla",
-                "Genera una captura PNG mediante la herramienta de Termux.",
-                "amctl see", "Copiar comando"), topMargin(match(), 10));
+                "Capturar pantalla",
+                "Guarda un PNG para revisar visualmente lo que muestra el teléfono.",
+                "amctl see", "Copiar comando"), topMargin(match(), 9));
+
+        page.addView(buildCommandCard(
+                R.drawable.ic_terminal, CYAN,
+                "Ver árbol de interfaz",
+                "Útil para depurar cuando el snapshot no encuentra un elemento.",
+                "amctl tree", "Copiar comando"), topMargin(match(), 9));
 
         page.addView(buildCommandCard(
                 R.drawable.ic_control, 0xFFFFC77D,
                 "Tocar una referencia",
-                "Sustituye @p3 por la referencia actual que quieras tocar.",
-                "amctl tapref @p3", "Copiar comando"), topMargin(match(), 10));
-
-        return scroll;
-    }
-
-    // ─────────────────────────── RUTINAS ──────────────────────────────
-
-    private View buildRoutinesPage() {
-        ScrollView scroll = newPage();
-        LinearLayout page = pageContent(scroll);
-        page.addView(buildPageHeader(
-                R.drawable.ic_routines, "Rutinas", "Secuencias para Termux", TEAL));
-
-        page.addView(buildNotice(
-                "PLANTILLAS, NO AUTOMATIZACIONES ACTIVAS",
-                "Copia una secuencia para pegarla en Termux. CostPhone no la ejecuta ni la programa desde esta pantalla.",
-                R.drawable.ic_clipboard, TEAL), topMargin(match(), 16));
-
-        page.addView(sectionLabel("SECUENCIAS DE EJEMPLO"), topMargin(wrap(), 24));
-        page.addView(buildCommandCard(
-                R.drawable.ic_inspect, 0xFF9A9EFF,
-                "Revisar la interfaz",
-                "Consulta los elementos y luego el árbol de accesibilidad.",
-                "amctl snap\namctl tree", "Copiar secuencia"), topMargin(match(), 11));
+                "Sustituye @p3 por una referencia del último snapshot. Tómalo de nuevo tras cambiar de pantalla.",
+                "amctl tapref @p3", "Copiar comando"), topMargin(match(), 9));
 
         page.addView(buildCommandCard(
-                R.drawable.ic_display, TEAL,
-                "Capturar y revisar",
-                "Crea una captura y después obtiene un snapshot interactivo.",
-                "amctl see\namctl snap", "Copiar secuencia"), topMargin(match(), 10));
-
-        page.addView(buildCommandCard(
-                R.drawable.ic_terminal, CYAN,
-                "Abrir Ajustes de Android",
-                "Inicia Ajustes del sistema y consulta sus elementos.",
-                "amctl launch com.android.settings\namctl snap",
-                "Copiar secuencia"), topMargin(match(), 10));
-
-        page.addView(buildCommandCard(
-                R.drawable.ic_control, 0xFFFFC77D,
+                R.drawable.ic_routines, TEAL,
                 "Desplazar y volver a inspeccionar",
-                "Realiza un gesto de ejemplo y actualiza las referencias.",
-                "amctl scroll down\namctl snap",
-                "Copiar secuencia"), topMargin(match(), 10));
-
+                "Actualiza las referencias después del desplazamiento.",
+                "amctl scroll down\namctl snap", "Copiar secuencia"), topMargin(match(), 9));
         return scroll;
     }
 
-    // ─────────────────────────── AJUSTES ──────────────────────────────
+    // ─────────────────────────── CONEXIONES ────────────────────────────
 
-    private View buildSettingsPage() {
+    private View buildConnectionPage() {
         ScrollView scroll = newPage();
         LinearLayout page = pageContent(scroll);
         page.addView(buildPageHeader(
-                R.drawable.ic_settings, "Ajustes", "Estado y configuración", CYAN));
+                R.drawable.ic_settings, "Conexión", "Accesibilidad + Shizuku", CYAN));
 
-        page.addView(buildServiceCard(), topMargin(match(), 16));
-        page.addView(sectionLabel("INFORMACIÓN DEL SISTEMA"), topMargin(wrap(), 25));
+        page.addView(buildServiceCard(), topMargin(match(), 14));
+        page.addView(buildShizukuCard(), topMargin(match(), 12));
+        page.addView(buildVirtualDisplayCard(), topMargin(match(), 10));
 
-        page.addView(buildFeatureCard(
-                R.drawable.ic_terminal, "Integración con Termux",
-                "Los comandos amctl se ejecutan desde Termux. Puedes copiar ejemplos desde Control e Inspector.",
-                CYAN, -1), topMargin(match(), 11));
-
-        page.addView(buildFeatureCard(
-                R.drawable.ic_display, "Pantalla virtual",
-                "La creación del display secundario es opcional y puede requerir conceder WRITE_SECURE_SETTINGS por ADB.",
-                TEAL, -1), topMargin(match(), 9));
-
-        page.addView(buildFeatureCard(
-                R.drawable.ic_check_circle, "Permisos y privacidad",
-                "El estado mostrado arriba corresponde al servicio de accesibilidad habilitado por Android.",
-                0xFF9A9EFF, -1), topMargin(match(), 9));
-
-        TextView version = text("CostPhone · v1.2", 11, TEXT_SOFT, false);
-        version.setGravity(Gravity.CENTER);
-        page.addView(version, topMargin(match(), 24));
+        TextView note = text(
+                "Shizuku no es root y no sustituye al servicio de Accesibilidad. En dispositivos sin root debe iniciarse desde Shizuku; en Android 11+ suele poder iniciarse con Depuración inalámbrica.",
+                11, TEXT_SOFT, false);
+        note.setLineSpacing(dp(3), 1f);
+        page.addView(note, topMargin(match(), 16));
         return scroll;
+    }
+
+    private View buildShizukuCard() {
+        LinearLayout card = column();
+        card.setPadding(dp(15), dp(15), dp(15), dp(15));
+        card.setBackground(gradient(BG_CARD_ALT, BG_CARD, 21, STROKE));
+
+        LinearLayout heading = row();
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+
+        FrameLayout iconBox = new FrameLayout(this);
+        iconBox.setBackground(rounded(0x2235E6E8, 14, 0x5535E6E8));
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(R.drawable.ic_settings);
+        icon.setColorFilter(CYAN);
+        icon.setPadding(dp(9), dp(9), dp(9), dp(9));
+        iconBox.addView(icon, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+        heading.addView(iconBox, size(dp(44), dp(44)));
+
+        LinearLayout titleBox = column();
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        titleLp.leftMargin = dp(11);
+        heading.addView(titleBox, titleLp);
+        titleBox.addView(text("Shizuku", 16, TEXT_MAIN, true));
+        shizukuStatusTitle = text("Comprobando conexión…", 11, TEXT_MUTED, false);
+        titleBox.addView(shizukuStatusTitle, topMargin(wrap(), 4));
+
+        shizukuStatusDot = new View(this);
+        shizukuStatusDot.setBackground(rounded(TEXT_SOFT, 999, 0));
+        heading.addView(shizukuStatusDot, size(dp(9), dp(9)));
+        card.addView(heading);
+
+        shizukuStatusDescription = text(
+                "Conecta con Shizuku para verificar el proceso privilegiado disponible en el dispositivo.",
+                12, TEXT_MUTED, false);
+        shizukuStatusDescription.setLineSpacing(dp(3), 1f);
+        card.addView(shizukuStatusDescription, topMargin(match(), 12));
+
+        shizukuDiagnostics = text(
+                "El diagnóstico aparecerá cuando el servicio de CostPhone pueda conectarse.",
+                11, TEXT_SOFT, false);
+        shizukuDiagnostics.setTypeface(Typeface.MONOSPACE, Typeface.NORMAL);
+        shizukuDiagnostics.setPadding(dp(10), dp(10), dp(10), dp(10));
+        shizukuDiagnostics.setBackground(rounded(0xFF07101C, 10, STROKE));
+        shizukuDiagnostics.setLineSpacing(dp(3), 1f);
+        card.addView(shizukuDiagnostics, topMargin(match(), 10));
+
+        shizukuActionButton = row();
+        shizukuActionButton.setGravity(Gravity.CENTER);
+        shizukuActionButton.setPadding(dp(13), dp(12), dp(13), dp(12));
+        shizukuActionButton.setBackground(gradient(0xFF18CFC2, 0xFF087D91, 13, 0xFF2ADBE1));
+        shizukuActionButton.setClickable(true);
+        shizukuActionButton.setFocusable(true);
+        shizukuActionButton.setOnClickListener(v -> onShizukuAction());
+
+        shizukuActionLabel = text("Conectar Shizuku", 13, 0xFFFFFFFF, true);
+        shizukuActionLabel.setGravity(Gravity.CENTER);
+        shizukuActionButton.addView(shizukuActionLabel, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+        card.addView(shizukuActionButton, topMargin(match(), 12));
+        return card;
+    }
+
+    private View buildVirtualDisplayCard() {
+        LinearLayout card = column();
+        card.setPadding(dp(15), dp(15), dp(15), dp(15));
+        card.setBackground(gradient(BG_CARD, BG_CARD_ALT, 19, STROKE));
+
+        LinearLayout heading = row();
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        FrameLayout iconBox = new FrameLayout(this);
+        iconBox.setBackground(rounded(0x2235D9B2, 13, 0x5535D9B2));
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(R.drawable.ic_display);
+        icon.setColorFilter(TEAL);
+        icon.setPadding(dp(9), dp(9), dp(9), dp(9));
+        iconBox.addView(icon, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+        heading.addView(iconBox, size(dp(42), dp(42)));
+
+        LinearLayout copy = column();
+        LinearLayout.LayoutParams copyLp = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        copyLp.leftMargin = dp(11);
+        heading.addView(copy, copyLp);
+        copy.addView(text("Pantalla virtual", 15, TEXT_MAIN, true));
+        TextView description = text(
+                "Shizuku puede activarla sin conceder WRITE_SECURE_SETTINGS a CostPhone. Se utiliza own_content_only para no espejar la pantalla principal.",
+                11, TEXT_MUTED, false);
+        description.setLineSpacing(dp(3), 1f);
+        copy.addView(description, topMargin(match(), 4));
+        card.addView(heading);
+
+        LinearLayout actions = row();
+        actions.setGravity(Gravity.CENTER_VERTICAL);
+        card.addView(actions, topMargin(match(), 12));
+
+        virtualDisplayOnButton = row();
+        virtualDisplayOnButton.setGravity(Gravity.CENTER);
+        virtualDisplayOnButton.setPadding(dp(8), dp(11), dp(8), dp(11));
+        virtualDisplayOnButton.setBackground(rounded(0x2235D9B2, 11, 0x6635D9B2));
+        virtualDisplayOnButton.setClickable(true);
+        virtualDisplayOnButton.setFocusable(true);
+        virtualDisplayOnButton.setOnClickListener(v -> createVirtualDisplay());
+        virtualDisplayOnLabel = text("Crear 1080 × 1920", 11, TEAL, true);
+        virtualDisplayOnLabel.setGravity(Gravity.CENTER);
+        virtualDisplayOnButton.addView(virtualDisplayOnLabel);
+        LinearLayout.LayoutParams onLp = new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        onLp.rightMargin = dp(6);
+        actions.addView(virtualDisplayOnButton, onLp);
+
+        virtualDisplayOffButton = row();
+        virtualDisplayOffButton.setGravity(Gravity.CENTER);
+        virtualDisplayOffButton.setPadding(dp(8), dp(11), dp(8), dp(11));
+        virtualDisplayOffButton.setBackground(rounded(0x22FF7185, 11, 0x66FF7185));
+        virtualDisplayOffButton.setClickable(true);
+        virtualDisplayOffButton.setFocusable(true);
+        virtualDisplayOffButton.setOnClickListener(v -> removeVirtualDisplay());
+        virtualDisplayOffLabel = text("Desactivar propia", 11, RED, true);
+        virtualDisplayOffLabel.setGravity(Gravity.CENTER);
+        virtualDisplayOffButton.addView(virtualDisplayOffLabel);
+        LinearLayout.LayoutParams offLp = new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        offLp.leftMargin = dp(6);
+        actions.addView(virtualDisplayOffButton, offLp);
+
+        updateVirtualDisplayButtons();
+        return card;
+    }
+
+    private void onShizukuAction() {
+        try {
+            if (!Shizuku.pingBinder()) {
+                openShizukuManager();
+                return;
+            }
+            if (Shizuku.isPreV11()) {
+                Toast.makeText(this, "Esta versión de Shizuku no es compatible", Toast.LENGTH_LONG).show();
+                return;
+            }
+            if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+                Shizuku.requestPermission(SHIZUKU_PERMISSION_REQUEST);
+                refreshShizukuStatus();
+                return;
+            }
+            bindShizukuUserService();
+        } catch (Throwable e) {
+            if (shizukuStatusDescription != null) {
+                shizukuStatusDescription.setText("No se pudo conectar con Shizuku: " + e.getMessage());
+            }
+            refreshShizukuStatus();
+        }
+    }
+
+    private void openShizukuManager() {
+        Intent launch = getPackageManager().getLaunchIntentForPackage("moe.shizuku.privileged.api");
+        if (launch != null) {
+            startActivity(launch);
+        } else {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://shizuku.rikka.app/download/")));
+        }
+    }
+
+    private void bindShizukuUserService() {
+        try {
+            if (!Shizuku.pingBinder()) {
+                refreshShizukuStatus();
+                return;
+            }
+            if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+                Shizuku.requestPermission(SHIZUKU_PERMISSION_REQUEST);
+                return;
+            }
+            if (shizukuServiceBound) {
+                queryShizukuDiagnostics();
+                refreshShizukuStatus();
+                return;
+            }
+            if (Shizuku.getVersion() < 10) {
+                if (shizukuStatusDescription != null) {
+                    shizukuStatusDescription.setText("Se necesita Shizuku API 10 o posterior.");
+                }
+                return;
+            }
+            if (shizukuServiceArgs == null) {
+                shizukuServiceArgs = new Shizuku.UserServiceArgs(
+                        new ComponentName(getPackageName(), CostPhoneShizukuService.class.getName()))
+                        .daemon(false)
+                        .processNameSuffix("costphone_service")
+                        .debuggable(BuildConfig.DEBUG)
+                        .version(BuildConfig.VERSION_CODE);
+            }
+            if (shizukuStatusDescription != null) {
+                shizukuStatusDescription.setText("Solicitando el servicio de diagnóstico…");
+            }
+            Shizuku.bindUserService(shizukuServiceArgs, shizukuServiceConnection);
+        } catch (Throwable e) {
+            if (shizukuStatusDescription != null) {
+                shizukuStatusDescription.setText("No se pudo iniciar el servicio: " + e.getMessage());
+            }
+            refreshShizukuStatus();
+        }
+    }
+
+    private void refreshShizukuStatus() {
+        boolean binder = false;
+        boolean permission = false;
+        try {
+            binder = Shizuku.pingBinder();
+            if (binder && !Shizuku.isPreV11()) {
+                permission = Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED;
+            }
+        } catch (Throwable ignored) {
+            binder = false;
+            permission = false;
+        }
+
+        int accent;
+        String title;
+        String body;
+        String action;
+        if (!binder) {
+            accent = RED;
+            title = "No iniciado";
+            body = "Abre Shizuku e inicia el servidor. CostPhone no puede iniciarlo silenciosamente.";
+            action = "Abrir Shizuku";
+        } else if (!permission) {
+            accent = 0xFFFFC77D;
+            title = "Servidor conectado · permiso pendiente";
+            body = "Shizuku está activo. Autoriza a CostPhone en el diálogo de Shizuku para usar las funciones adicionales.";
+            action = "Conceder permiso";
+        } else if (shizukuServiceBound) {
+            accent = GREEN;
+            title = "Conexión verificada";
+            body = "Permiso concedido y servicio de diagnóstico conectado bajo la identidad de Shizuku.";
+            action = "Verificar de nuevo";
+        } else {
+            accent = CYAN;
+            title = "Permiso concedido";
+            body = "Conecta el servicio para verificar el UID real y habilitar la gestión de pantalla virtual.";
+            action = "Conectar servicio";
+        }
+
+        if (shizukuStatusTitle != null) {
+            shizukuStatusTitle.setText(title);
+            shizukuStatusTitle.setTextColor(accent);
+        }
+        if (shizukuStatusDot != null) {
+            shizukuStatusDot.setBackground(rounded(accent, 999, 0));
+        }
+        if (shizukuStatusDescription != null) shizukuStatusDescription.setText(body);
+        if (shizukuActionLabel != null) shizukuActionLabel.setText(action);
+        if (shizukuActionButton != null) {
+            shizukuActionButton.setBackground(gradient(
+                    binder ? 0xFF18CFC2 : 0xFF4A5468,
+                    binder ? 0xFF087D91 : 0xFF2A3448,
+                    13, binder ? 0xFF2ADBE1 : STROKE));
+        }
+        if (shizukuDiagnostics != null && !shizukuServiceBound) {
+            shizukuDiagnostics.setText(binder
+                    ? "Servidor de Shizuku detectado. Pulsa Conectar servicio para comprobar UID y ajustes."
+                    : "Sin servidor disponible. Si no tienes Shizuku, abre su página oficial desde este botón.");
+        }
+        updateVirtualDisplayButtons();
+    }
+
+    private void queryShizukuDiagnostics() {
+        final ICostPhoneShizukuService remote = shizukuService;
+        if (remote == null) return;
+        new Thread(() -> {
+            final String result;
+            try {
+                result = remote.getDiagnostics();
+            } catch (RemoteException | RuntimeException e) {
+                runOnUiThread(() -> {
+                    if (shizukuDiagnostics != null) {
+                        shizukuDiagnostics.setText("Error de diagnóstico: " + e.getMessage());
+                    }
+                });
+                return;
+            }
+            runOnUiThread(() -> {
+                if (shizukuDiagnostics != null) shizukuDiagnostics.setText(result);
+            });
+        }, "CostPhone-Shizuku-Refresh").start();
+    }
+
+    private boolean hasOwnedVirtualDisplay() {
+        SharedPreferences prefs = getSharedPreferences(SHIZUKU_PREFS, MODE_PRIVATE);
+        return prefs.getBoolean(PREF_VDISPLAY_OWNED, false);
+    }
+
+    private void updateVirtualDisplayButtons() {
+        boolean enabled = false;
+        try {
+            enabled = Shizuku.pingBinder()
+                    && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+                    && shizukuServiceBound && shizukuService != null;
+        } catch (Throwable ignored) { }
+
+        if (virtualDisplayOnButton != null) {
+            virtualDisplayOnButton.setAlpha(enabled ? 1f : 0.45f);
+            virtualDisplayOnButton.setClickable(enabled);
+        }
+        if (virtualDisplayOffButton != null) {
+            boolean canRemove = enabled && hasOwnedVirtualDisplay();
+            virtualDisplayOffButton.setAlpha(canRemove ? 1f : 0.40f);
+            virtualDisplayOffButton.setClickable(canRemove);
+        }
+        if (virtualDisplayOnLabel != null) {
+            virtualDisplayOnLabel.setText(hasOwnedVirtualDisplay()
+                    ? "Pantalla de CostPhone activa" : "Crear 1080 × 1920");
+        }
+        if (virtualDisplayOffLabel != null) {
+            virtualDisplayOffLabel.setText(hasOwnedVirtualDisplay()
+                    ? "Desactivar propia" : "Nada propio que apagar");
+        }
+    }
+
+    private void createVirtualDisplay() {
+        final ICostPhoneShizukuService remote = shizukuService;
+        if (remote == null || !shizukuServiceBound) {
+            Toast.makeText(this, "Conecta Shizuku primero", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (hasOwnedVirtualDisplay()) {
+            Toast.makeText(this, "CostPhone ya tiene una pantalla virtual marcada como propia", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (virtualDisplayOnLabel != null) virtualDisplayOnLabel.setText("Creando…");
+        new Thread(() -> {
+            final String result;
+            try {
+                result = remote.createVirtualDisplay(VDISPLAY_WIDTH, VDISPLAY_HEIGHT, VDISPLAY_DENSITY);
+            } catch (RemoteException | RuntimeException e) {
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Error de Shizuku: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    updateVirtualDisplayButtons();
+                });
+                return;
+            }
+            runOnUiThread(() -> {
+                if (result.startsWith("CREATED:")) {
+                    getSharedPreferences(SHIZUKU_PREFS, MODE_PRIVATE).edit()
+                            .putBoolean(PREF_VDISPLAY_OWNED, true).apply();
+                    Toast.makeText(this, "Pantalla virtual creada", Toast.LENGTH_SHORT).show();
+                } else if (result.startsWith("EXISTS:")) {
+                    Toast.makeText(this, "Esa configuración ya existía; no se marcará como propia", Toast.LENGTH_LONG).show();
+                } else {
+                    Toast.makeText(this, result, Toast.LENGTH_LONG).show();
+                }
+                if (shizukuDiagnostics != null) shizukuDiagnostics.setText(result);
+                updateVirtualDisplayButtons();
+                refreshShizukuStatus();
+            });
+        }, "CostPhone-VDisplay-Create").start();
+    }
+
+    private void removeVirtualDisplay() {
+        final ICostPhoneShizukuService remote = shizukuService;
+        if (remote == null || !shizukuServiceBound || !hasOwnedVirtualDisplay()) {
+            Toast.makeText(this, "No hay una pantalla virtual de CostPhone que desactivar", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        new Thread(() -> {
+            final String result;
+            try {
+                result = remote.removeVirtualDisplay(VDISPLAY_WIDTH, VDISPLAY_HEIGHT, VDISPLAY_DENSITY);
+            } catch (RemoteException | RuntimeException e) {
+                runOnUiThread(() -> Toast.makeText(
+                        this, "Error al apagar la pantalla: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                return;
+            }
+            runOnUiThread(() -> {
+                if (result.startsWith("REMOVED:")) {
+                    getSharedPreferences(SHIZUKU_PREFS, MODE_PRIVATE).edit()
+                            .remove(PREF_VDISPLAY_OWNED).apply();
+                    Toast.makeText(this, "Pantalla virtual desactivada", Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(this, result, Toast.LENGTH_LONG).show();
+                }
+                if (shizukuDiagnostics != null) shizukuDiagnostics.setText(result);
+                updateVirtualDisplayButtons();
+                refreshShizukuStatus();
+            });
+        }, "CostPhone-VDisplay-Remove").start();
     }
 
     // ───────────────────────── COMPONENTES ────────────────────────────
