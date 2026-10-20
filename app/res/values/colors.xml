@@ -1,43 +1,45 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Fase 2c tokens -->
+    <!-- CostPhone 1.6.1 — paleta nocturna coherente inspirada en el rediseño 1.3 -->
     <color name="bg">#060B14</color>
-    <color name="surface">#0D1828</color>
-    <color name="surface2">#132238</color>
-    <color name="border">#1D3250</color>
-    <color name="text">#EAF1FB</color>
-    <color name="text2">#9DB0CC</color>
-    <color name="text3">#7A8EAE</color>
-    <color name="accent">#2DE2C0</color>
-    <color name="accent2">#8B5CF6</color>
-    <color name="accent2_text">#A78BFA</color>
-    <color name="on_accent">#04121A</color>
-    <color name="ok">#2DE2C0</color>
-    <color name="info">#4C9AFF</color>
-    <color name="aviso">#FFC24B</color>
-    <color name="error">#FF5C6C</color>
+    <color name="surface">#0B1524</color>
+    <color name="surface2">#102035</color>
+    <color name="border">#1A3046</color>
+    <color name="outline_accent">#205064</color>
+    <color name="hero">#10283A</color>
+    <color name="text">#F2F7FF</color>
+    <color name="text2">#9AADC8</color>
+    <color name="text3">#8294B2</color>
+    <color name="accent">#35E6E8</color>
+    <color name="accent2">#8B86FF</color>
+    <color name="accent2_text">#B3ADFF</color>
+    <color name="on_accent">#06171C</color>
+    <color name="ok">#25D9A1</color>
+    <color name="info">#64A9FF</color>
+    <color name="aviso">#FFC96B</color>
+    <color name="error">#FF7185</color>
 
-    <!-- Legacy aliases (mantener existentes para no romper referencias) -->
-    <color name="ic_bg">#2DE2C0</color>
+    <!-- Alias antiguos conservados para evitar romper referencias existentes -->
+    <color name="ic_bg">#35E6E8</color>
     <color name="bg_main">#060B14</color>
-    <color name="bg_card">#0D1828</color>
-    <color name="bg_card_alt">#132238</color>
-    <color name="bg_input">#0D1828</color>
+    <color name="bg_card">#0B1524</color>
+    <color name="bg_card_alt">#102035</color>
+    <color name="bg_input">#0B1524</color>
     <color name="bg_header">#060B14</color>
-    <color name="text_main">#EAF1FB</color>
-    <color name="text_dim">#9DB0CC</color>
-    <color name="text_muted">#7A8EAE</color>
-    <color name="text_log">#9DB0CC</color>
-    <color name="log_bg">#0D1828</color>
-    <color name="divider">#1D3250</color>
-    <color name="accent_primary">#2DE2C0</color>
-    <color name="accent_primary_dark">#1FBF8F</color>
-    <color name="accent_positive">#2DE2C0</color>
-    <color name="accent_warning">#FFC24B</color>
-    <color name="accent_error">#FF5C6C</color>
-    <color name="accent_info">#4C9AFF</color>
-    <color name="accent_action">#8B5CF6</color>
-    <color name="badge_bg">#132238</color>
-    <color name="badge_text">#2DE2C0</color>
-    <color name="surface_border">#1D3250</color>
+    <color name="text_main">#F2F7FF</color>
+    <color name="text_dim">#9AADC8</color>
+    <color name="text_muted">#8294B2</color>
+    <color name="text_log">#9AADC8</color>
+    <color name="log_bg">#0B1524</color>
+    <color name="divider">#1A3046</color>
+    <color name="accent_primary">#35E6E8</color>
+    <color name="accent_primary_dark">#16BFB7</color>
+    <color name="accent_positive">#25D9A1</color>
+    <color name="accent_warning">#FFC96B</color>
+    <color name="accent_error">#FF7185</color>
+    <color name="accent_info">#64A9FF</color>
+    <color name="accent_action">#8B86FF</color>
+    <color name="badge_bg">#102035</color>
+    <color name="badge_text">#35E6E8</color>
+    <color name="surface_border">#1A3046</color>
 </resources>

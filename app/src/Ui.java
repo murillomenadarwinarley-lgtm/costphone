@@ -56,9 +56,14 @@ public final class Ui {
     public static LinearLayout card(Activity a) {
         LinearLayout c = new LinearLayout(a);
         c.setOrientation(LinearLayout.VERTICAL);
-        GradientDrawable bg = shape(a, "surface", 20f, "border", 1f);
+        GradientDrawable bg = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{color(a, "surface2"), color(a, "surface")});
+        bg.setCornerRadius(dp(a, 20));
+        bg.setStroke(dp(a, 1), color(a, "border"));
         c.setBackground(bg);
-        c.setPadding(dp(a, 16), dp(a, 16), dp(a, 16), dp(a, 16));
+        c.setPadding(dp(a, 18), dp(a, 18), dp(a, 18), dp(a, 18));
+        c.setElevation(dp(a, 1));
         return c;
     }
 
@@ -69,24 +74,28 @@ public final class Ui {
         h.setOrientation(LinearLayout.HORIZONTAL);
         h.setGravity(Gravity.CENTER_VERTICAL);
 
+        LinearLayout iconShell = new LinearLayout(a);
+        iconShell.setGravity(Gravity.CENTER);
+        iconShell.setBackground(shape(a, "surface2", 11f, "border", 1f));
         ImageView icon = new ImageView(a);
         icon.setImageResource(iconRes);
         icon.setColorFilter(color(a, "accent"));
-        h.addView(icon, new LinearLayout.LayoutParams(dp(a, 20), dp(a, 20)));
+        iconShell.addView(icon, new LinearLayout.LayoutParams(dp(a, 20), dp(a, 20)));
+        h.addView(iconShell, new LinearLayout.LayoutParams(dp(a, 36), dp(a, 36)));
 
         TextView t = new TextView(a);
         t.setText(title);
         t.setTextSize(15);
         t.setTextColor(color(a, "text"));
-        t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.leftMargin = dp(a, 10);
+        lp.leftMargin = dp(a, 11);
         h.addView(t, lp);
 
         LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        hlp.bottomMargin = dp(a, 12);
+        hlp.bottomMargin = dp(a, 10);
         h.setLayoutParams(hlp);
         return h;
     }
@@ -97,14 +106,17 @@ public final class Ui {
         LinearLayout b = new LinearLayout(a);
         b.setOrientation(LinearLayout.HORIZONTAL);
         b.setGravity(Gravity.CENTER);
-        b.setMinimumHeight(dp(a, 48));
-        b.setPadding(dp(a, 16), dp(a, 12), dp(a, 16), dp(a, 12));
+        b.setMinimumHeight(dp(a, 50));
+        b.setPadding(dp(a, 18), dp(a, 13), dp(a, 18), dp(a, 13));
 
         GradientDrawable bg = new GradientDrawable(
                 GradientDrawable.Orientation.LEFT_RIGHT,
-                new int[]{color(a, "accent"), color(a, "accent")});
-        bg.setCornerRadius(dp(a, 14));
+                new int[]{color(a, "accent"), color(a, "accent_primary_dark")});
+        bg.setCornerRadius(dp(a, 15));
         b.setBackground(ripple(a, bg, null, color(a, "accent_primary_dark")));
+        b.setElevation(dp(a, 1));
+        b.setClickable(true);
+        b.setFocusable(true);
 
         if (iconRes != 0) {
             ImageView iv = new ImageView(a);
@@ -116,10 +128,10 @@ public final class Ui {
         t.setText(text);
         t.setTextSize(14);
         t.setTextColor(color(a, "on_accent"));
-        t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        if (iconRes != 0) tlp.leftMargin = dp(a, 8);
+        if (iconRes != 0) tlp.leftMargin = dp(a, 9);
         b.addView(t, tlp);
 
         b.setOnClickListener(onClick);
@@ -135,22 +147,24 @@ public final class Ui {
         b.setMinimumHeight(dp(a, 48));
         b.setPadding(dp(a, 16), dp(a, 12), dp(a, 16), dp(a, 12));
 
-        GradientDrawable bg = shape(a, "surface2", 14f, null, 0);
+        GradientDrawable bg = shape(a, "surface2", 15f, "border", 1f);
         int accent = color(a, "accent");
-        bg.setStroke(dp(a, 1), (accent & 0x00FFFFFF) | 0x66000000);
-        b.setBackground(ripple(a, bg, null, (accent & 0x00FFFFFF) | 0x33000000));
+        b.setBackground(ripple(a, bg, shape(a, "surface2", 15f, null, 0),
+                (accent & 0x00FFFFFF) | 0x2D000000));
+        b.setClickable(true);
+        b.setFocusable(true);
 
         if (iconRes != 0) {
             ImageView iv = new ImageView(a);
             iv.setImageResource(iconRes);
-            iv.setColorFilter(color(a, "accent"));
+            iv.setColorFilter(accent);
             b.addView(iv, new LinearLayout.LayoutParams(dp(a, 20), dp(a, 20)));
         }
         TextView t = new TextView(a);
         t.setText(text);
         t.setTextSize(14);
-        t.setTextColor(color(a, "accent"));
-        t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setTextColor(accent);
+        t.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         if (iconRes != 0) tlp.leftMargin = dp(a, 8);
@@ -168,8 +182,10 @@ public final class Ui {
         b.setGravity(Gravity.CENTER);
         b.setMinimumHeight(dp(a, 48));
         b.setPadding(dp(a, 16), dp(a, 12), dp(a, 16), dp(a, 12));
-        b.setBackground(ripple(a, null, shape(a, "surface", 14f, null, 0),
-                color(a, "accent")));
+        b.setBackground(ripple(a, shape(a, "surface2", 15f, "border", 1f),
+                shape(a, "surface2", 15f, null, 0), color(a, "accent")));
+        b.setClickable(true);
+        b.setFocusable(true);
 
         if (iconRes != 0) {
             ImageView iv = new ImageView(a);
@@ -181,7 +197,7 @@ public final class Ui {
         t.setText(text);
         t.setTextSize(14);
         t.setTextColor(color(a, "accent"));
-        t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         if (iconRes != 0) tlp.leftMargin = dp(a, 8);
@@ -197,19 +213,20 @@ public final class Ui {
         LinearLayout c = new LinearLayout(a);
         c.setOrientation(LinearLayout.HORIZONTAL);
         c.setGravity(Gravity.CENTER_VERTICAL);
-        c.setPadding(dp(a, 10), dp(a, 4), dp(a, 10), dp(a, 4));
-        // relleno translúcido (18%) del propio token → texto legible (>= 4.5:1)
-        GradientDrawable bg = new GradientDrawable();
+        c.setPadding(dp(a, 11), dp(a, 6), dp(a, 11), dp(a, 6));
+        c.setMinimumHeight(dp(a, 30));
         int base = color(a, colorToken);
-        bg.setColor((base & 0x00FFFFFF) | 0x2E000000);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor((base & 0x00FFFFFF) | 0x22000000);
         bg.setCornerRadius(dp(a, 999f));
+        bg.setStroke(dp(a, 1), (base & 0x00FFFFFF) | 0x55000000);
         c.setBackground(bg);
 
         TextView t = new TextView(a);
         t.setText(text);
         t.setTextSize(11);
-        t.setTextColor(color(a, colorToken));
-        t.setTypeface(Typeface.DEFAULT_BOLD);
+        t.setTextColor(base);
+        t.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         c.addView(t);
         return c;
     }
@@ -221,25 +238,30 @@ public final class Ui {
         tile.setOrientation(LinearLayout.VERTICAL);
         tile.setGravity(Gravity.CENTER);
         tile.setPadding(dp(a, 12), dp(a, 14), dp(a, 12), dp(a, 14));
-        tile.setBackground(shape(a, "surface", 20f, "border", 1f));
-        tile.setMinimumHeight(dp(a, 90));
+        tile.setBackground(shape(a, "surface", 19f, "border", 1f));
+        tile.setMinimumHeight(dp(a, 104));
+        tile.setElevation(dp(a, 1));
 
+        LinearLayout iconHolder = new LinearLayout(a);
+        iconHolder.setGravity(Gravity.CENTER);
+        iconHolder.setBackground(shape(a, "surface2", 12f, "border", 1f));
         ImageView icon = new ImageView(a);
         icon.setImageResource(iconRes);
         icon.setColorFilter(color(a, "accent"));
-        tile.addView(icon, new LinearLayout.LayoutParams(dp(a, 24), dp(a, 24)));
+        iconHolder.addView(icon, new LinearLayout.LayoutParams(dp(a, 20), dp(a, 20)));
+        tile.addView(iconHolder, new LinearLayout.LayoutParams(dp(a, 38), dp(a, 38)));
 
         TextView v = new TextView(a);
         v.setText(value);
         v.setTextSize(14);
         v.setTextColor(color(a, "text"));
-        v.setTypeface(Typeface.DEFAULT_BOLD);
+        v.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         v.setGravity(Gravity.CENTER);
         v.setMaxLines(2);
         v.setEllipsize(TextUtils.TruncateAt.END);
         LinearLayout.LayoutParams vlp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        vlp.topMargin = dp(a, 6);
+        vlp.topMargin = dp(a, 8);
         tile.addView(v, vlp);
 
         TextView l = new TextView(a);
@@ -251,7 +273,7 @@ public final class Ui {
         l.setEllipsize(TextUtils.TruncateAt.END);
         LinearLayout.LayoutParams llp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        llp.topMargin = dp(a, 2);
+        llp.topMargin = dp(a, 3);
         tile.addView(l, llp);
 
         return tile;
@@ -263,7 +285,7 @@ public final class Ui {
         LinearLayout row = new LinearLayout(a);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(a, 4), dp(a, 3), dp(a, 4), dp(a, 3));
+        row.setPadding(dp(a, 4), dp(a, 5), dp(a, 4), dp(a, 5));
 
         View dot = new View(a);
         String colorToken;
