@@ -176,7 +176,7 @@ en el lugar correcto y la registra en `AGENTS.md` automáticamente.
 
 Hay **dos modos separados**:
 
-- **CostPhone PC nativo (independiente del teléfono):** ejecuta el servidor MCP, las capturas y la automatización del escritorio directamente en Windows. No requiere Android, Termux, SSH ni el APK. Instala con [la guía nativa de Windows](docs/pc-native-windows.md) y el script pc/windows/install-costphone-pc.ps1. Incluye inspección de ventana y controles de accesibilidad de Windows, capturas, campos de texto y casillas, apertura de aplicaciones/URL, desplazamiento y control opcional de teclado/ratón.
+- **CostPhone PC nativo (independiente del teléfono):** ejecuta el servidor MCP, las capturas y la automatización del escritorio directamente en Windows. No requiere Android, Termux, SSH ni el APK. Instala con [la guía nativa de Windows](docs/pc-native-windows.md) y el script pc/windows/install-costphone-pc.ps1. Incluye inspección de ventana y controles de accesibilidad de Windows, capturas, campos de texto y casillas, apertura de aplicaciones/URL, desplazamiento, arrastre y control opcional de teclado/ratón.
 - **Usar Windows para controlar el teléfono Android (opcional):** si quieres que el agente controle el móvil, OpenCode en Windows puede conectarse por SSH al motor que permanece en Termux. Sigue la [guía del puente Android](docs/pc-windows.md) y usa pc/windows/setup-costphone.ps1.
 
 La versión nativa se registra como `costphone-pc`; el puente Android conserva su registro `costphone-engine`. Se pueden mantener ambas configuraciones. Ninguna sustituye la APK ni los secretos de firma de Android.
