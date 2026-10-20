@@ -23,7 +23,7 @@ La observación del contenido de una ventana se hace visualmente mediante la cap
     Set-ExecutionPolicy -Scope Process Bypass -Force
     & $script
 
-El instalador descarga los tres archivos necesarios a %LOCALAPPDATA%\CostPhonePC, crea un entorno virtual aislado, instala sus dependencias y añade **costphone-pc** a %USERPROFILE%\.config\opencode\opencode.json. Si ya existe ese archivo, primero crea una copia de seguridad. Si encuentra opencode.jsonc, se detiene para no destruir comentarios ni editarlo de forma insegura.
+El instalador descarga el motor, sus dependencias y el skill de uso a %LOCALAPPDATA%\CostPhonePC, crea un entorno virtual aislado, instala sus dependencias, instala el skill en %USERPROFILE%\.config\opencode\skills\costphone-pc y añade **costphone-pc** a %USERPROFILE%\.config\opencode\opencode.json. Si ya existe ese archivo, primero crea una copia de seguridad. Si encuentra opencode.jsonc, se detiene para no destruir comentarios ni editarlo de forma insegura.
 
 Durante la instalación pregunta si autorizas a OpenCode a escribir y hacer clic en el PC. La respuesta predeterminada es **No**. Si escribes **SI**, la configuración añade el argumento --allow-input; puedes reinstalar para cambiar la decisión. Sin ese permiso, inspeccionar capturas, abrir aplicaciones y abrir URL sigue disponible, pero las herramientas de teclado/ratón responden con input_disabled.
 
