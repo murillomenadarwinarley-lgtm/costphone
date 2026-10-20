@@ -49,7 +49,7 @@ public class SettingsActivity extends Activity {
     private LinearLayout serviceStateBadge;
     private TextView serviceStateText;
     private View serviceIconBox;
-    private TextView serviceIconGlyph;
+    private ImageView serviceIconGlyph;
     private TextView serviceDescription;
     private LinearLayout actionButton;
     private TextView actionLabel;
@@ -95,19 +95,19 @@ public class SettingsActivity extends Activity {
         page.addView(sectionLabel("FUNCIONES PRINCIPALES"), topMargin(wrap(), 26));
 
         page.addView(buildInfoCard(
-                ">_",
+                R.drawable.ic_terminal,
                 "Control desde Termux",
                 "Lanza aplicaciones, toca, desliza y escribe mediante comandos amctl.",
                 0xFF45DCE6), topMargin(match(), 12));
 
         page.addView(buildInfoCard(
-                "◎",
+                R.drawable.ic_inspect,
                 "Lectura de interfaz",
                 "Inspecciona elementos en pantalla y obtiene referencias para el agente.",
                 0xFF8B9CFF), topMargin(match(), 10));
 
         page.addView(buildInfoCard(
-                "▣",
+                R.drawable.ic_display,
                 "Pantalla virtual",
                 "Modo opcional para separar las tareas del agente de la pantalla principal.",
                 0xFF45D9B2), topMargin(match(), 10));
@@ -260,7 +260,10 @@ public class SettingsActivity extends Activity {
         eyeTwo.setBackground(rounded(CYAN, 999, 0));
         eyes.addView(eyeTwo, size(dp(7), dp(12)));
 
-        TextView sparkle = text("✦", 18, CYAN, true);
+        ImageView sparkle = new ImageView(this);
+        sparkle.setImageResource(R.drawable.ic_sparkles);
+        sparkle.setColorFilter(CYAN);
+        sparkle.setScaleType(ImageView.ScaleType.FIT_CENTER);
         FrameLayout.LayoutParams sparkleLp = new FrameLayout.LayoutParams(
                 dp(24), dp(24), Gravity.TOP | Gravity.RIGHT);
         sparkleLp.topMargin = dp(2);
@@ -289,8 +292,11 @@ public class SettingsActivity extends Activity {
         serviceIconBox = new FrameLayout(this);
         serviceIconBox.setBackground(rounded(0x2233D9B2, 15, 0x4433D9B2));
 
-        serviceIconGlyph = text("✓", 20, GREEN, true);
-        serviceIconGlyph.setGravity(Gravity.CENTER);
+        serviceIconGlyph = new ImageView(this);
+        serviceIconGlyph.setImageResource(R.drawable.ic_check_circle);
+        serviceIconGlyph.setColorFilter(GREEN);
+        serviceIconGlyph.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        serviceIconGlyph.setPadding(dp(10), dp(10), dp(10), dp(10));
         ((FrameLayout) serviceIconBox).addView(serviceIconGlyph,
                 new FrameLayout.LayoutParams(
                         FrameLayout.LayoutParams.MATCH_PARENT,
@@ -350,16 +356,18 @@ public class SettingsActivity extends Activity {
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
         actionButton.addView(actionLabel, actionLabelLp);
 
-        TextView arrow = text("→", 22, 0xFFFFFFFF, false);
-        arrow.setGravity(Gravity.CENTER);
-        actionButton.addView(arrow, size(dp(28), dp(24)));
+        ImageView arrow = new ImageView(this);
+        arrow.setImageResource(R.drawable.ic_arrow_right);
+        arrow.setColorFilter(0xFFFFFFFF);
+        arrow.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        actionButton.addView(arrow, size(dp(28), dp(28)));
 
         card.addView(actionButton, topMargin(match(), 15));
 
         return card;
     }
 
-    private View buildInfoCard(String symbol, String heading, String description, int accent) {
+    private View buildInfoCard(int iconResource, String heading, String description, int accent) {
         LinearLayout card = row();
         card.setGravity(Gravity.CENTER_VERTICAL);
         card.setPadding(dp(14), dp(14), dp(14), dp(14));
@@ -368,8 +376,11 @@ public class SettingsActivity extends Activity {
         FrameLayout iconBox = new FrameLayout(this);
         iconBox.setBackground(rounded(withAlpha(accent, 0x28), 14, withAlpha(accent, 0x66)));
 
-        TextView icon = text(symbol, 18, accent, true);
-        icon.setGravity(Gravity.CENTER);
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(iconResource);
+        icon.setColorFilter(accent);
+        icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        icon.setPadding(dp(10), dp(10), dp(10), dp(10));
         iconBox.addView(icon, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
@@ -469,8 +480,9 @@ public class SettingsActivity extends Activity {
                     on ? 0x4433D9B2 : 0x44FF7185));
         }
         if (serviceIconGlyph != null) {
-            serviceIconGlyph.setText(on ? "✓" : "!");
-            serviceIconGlyph.setTextColor(accent);
+            serviceIconGlyph.setImageResource(
+                    on ? R.drawable.ic_check_circle : R.drawable.ic_alert_triangle);
+            serviceIconGlyph.setColorFilter(accent);
         }
         if (serviceDescription != null) {
             serviceDescription.setText(on
