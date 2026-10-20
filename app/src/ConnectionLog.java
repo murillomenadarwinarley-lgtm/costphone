@@ -9,8 +9,9 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Registro de eventos de conexión, pensado para depurar con la app abierta.
@@ -33,7 +34,12 @@ public final class ConnectionLog {
     private static final List<String> LINES = new ArrayList<>();
     private static volatile File file;
     // No bloquear UI/Accesibilidad al persistir eventos.
-    private static final ExecutorService DISK = Executors.newSingleThreadExecutor();
+    // Acota la cola de escritura para que una ráfaga de comandos no consuma la RAM.
+    // En saturación se priorizan las entradas recientes.
+    private static final ThreadPoolExecutor DISK = new ThreadPoolExecutor(
+            1, 1, 0L, TimeUnit.MILLISECONDS,
+            new ArrayBlockingQueue<Runnable>(256),
+            new ThreadPoolExecutor.DiscardOldestPolicy());
     private static final long MAX_FILE_BYTES = 96L * 1024L;
 
     private ConnectionLog() { }
