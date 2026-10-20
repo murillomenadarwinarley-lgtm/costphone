@@ -94,7 +94,9 @@ amctl see      # captura PNG -> /sdcard/Download/accessdroid-shot.png
 | Scroll | `amctl scroll down` |
 | Atrás / Inicio / Recientes | `amctl back` / `home` / `recents` |
 | Clic por texto | `amctl click "Enviar"` |
-| Clic por resource-id | `amctl clickid com.whatsapp:id/send` |
+| Clic por resource-id (sin captura) | `amctl clickid com.whatsapp:id/send` |
+| Esperar texto sin PNG | `amctl waittext "Listo" 8` |
+| Encadenar pasos seguros | `amctl batch` (un comando por línea, desde stdin) |
 | Ver los displays | `amctl displays` |
 | Crear/apagar la pantalla virtual del agente | `amctl display on 1080 1920 320` / `display off` |
 | Todo lo anterior **en la pantalla virtual** | `amctl -d <id> <cualquier comando>` |
@@ -103,13 +105,23 @@ Extra v1.1: cuando el teclado o una toolbar flotante están abiertos, sus
 botones entran al snapshot marcados `[ime]` / `[ovl]` / `[sys]` — Enter,
 borrar y "Seleccionar todo" se tocan con `tapref` como cualquier elemento.
 
-### El loop (estilo agent-browser)
+### Interacción rápida sin capturas
 
+Prefiere `clickid` o `click` y reserva `see` para interfaces que no expongan
+texto/controles accesibles. Un lote seguro permite encadenar pasos:
+
+```bash
+amctl batch <<'EOF'
+clickid com.whatsapp:id/entry
+type Hola
+clickid com.whatsapp:id/send
+waittext Hola 8
+EOF
 ```
-amctl snap           →  lista interactiva con refs @pN
-amctl tapref @pN     →  toca ese elemento
-amctl snap           →  RE-SNAPSHOT (las refs se invalidan tras cada cambio)
-```
+
+Cada acción mantiene la guardia sobre la app en primer plano. Usa `snap` cuando
+necesites descubrir selectores; sus refs se renuevan en cada snapshot y no deben
+reutilizarse después de cambiar de pantalla.
 
 ## Pantalla virtual (v1.2) — el agente en su propio monitor
 

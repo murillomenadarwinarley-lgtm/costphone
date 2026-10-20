@@ -47,8 +47,12 @@
 #   revoke   <app|pkg> <perm>   Revoke a permission (socket only)
 #   clear    <app|pkg>          Clear app data/cache (socket only)
 #   tree                         Dump current UI tree -> /sdcard/Download/accessdroid-tree.txt
-#   snap     [-a] [--filter T]  Snapshot con refs @pN (estilo agent-browser snapshot -i)
-#   tapref   @pN [ms]           Tap on the element of that snap ref (re-snap tras cambios)
+#   snap     [-a] [--filter T]  Snapshot textual con refs @pN (sin captura PNG)
+#   tapref   @pN [ms]           Tap al elemento de un snapshot reciente
+#   click    "texto"             Acción accesible por texto, sin screenshot
+#   clickid  resourceId          Acción accesible por ID, sin screenshot
+#   waittext "texto" [segundos] Espera hasta que aparezca texto en el árbol UI
+#   batch                       Ejecuta pasos seguros desde stdin, guardia por acción
 #   see      [file]             Screenshot PNG -> /sdcard/Download/accessdroid-shot.png
 #   tap      X Y [ms]           Tap at (X,Y); optional hold duration
 #   longpress X Y [ms]          Long-press at (X,Y); default 500ms
@@ -978,6 +982,71 @@ PY
 cmd_click()      { bc com.accessdroid.termux.ACTION_CLICK_TEXT --es text "$1"; }
 cmd_clickid()    { bc com.accessdroid.termux.ACTION_CLICK_ID --es id "$1"; }
 cmd_scrollto()   { bc com.accessdroid.termux.ACTION_SCROLL_TO --es text "$1"; }
+
+# Espera semántica: lee el árbol de accesibilidad, nunca crea ni necesita PNG.
+cmd_waittext() {
+    local needle="${1:-}" timeout="${2:-8}" started="${SECONDS:-0}" out rc
+    [[ -n "$needle" ]] || { echo 'uso: amctl waittext "texto visible" [timeout 1..20]' >&2; return 2; }
+    [[ "$timeout" =~ ^[0-9]+$ ]] && (( timeout >= 1 && timeout <= 20 )) || {
+        echo "amctl waittext: timeout debe ser un entero entre 1 y 20 segundos" >&2; return 2;
+    }
+    while (( SECONDS - started <= timeout )); do
+        out=$(cmd_tree 2>&1); rc=$?
+        if (( rc == 6 )); then printf '%s\n' "$out" >&2; return 6; fi
+        if (( rc != 0 )); then printf '%s\n' "$out" >&2; return "$rc"; fi
+        if printf '%s' "$out" | grep -Fqi -- "$needle"; then
+            printf 'visible: %s\n' "$needle"
+            return 0
+        fi
+        sleep 0.15
+    done
+    printf 'timeout: no apareció "%s" en %ss\n' "$needle" "$timeout" >&2
+    return 1
+}
+
+# Lote de pasos allow-listed. No se usa eval ni se acepta shell arbitrario.
+# Un paso por línea; después del comando se acepta el resto de la línea como argumento.
+# Todas las interacciones pasan por bc()/guard_action, incluidas las del lote.
+cmd_batch() {
+    local line cmd rest count=0 line_no=0 rc first_char expected wait_s
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line_no=$((line_no + 1))
+        [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+        first_char="${line#"${line%%[![:space:]]*}"}"
+        [[ "$first_char" == #* ]] && continue
+        line="$first_char"
+        cmd="${line%%[[:space:]]*}"
+        rest="${line#"$cmd"}"
+        rest="${rest#"${rest%%[![:space:]]*}"}"
+        if [[ "$rest" == \"*\" ]]; then rest="${rest:1:${#rest}-2}"
+        elif [[ "$rest" == \'*\' ]]; then rest="${rest:1:${#rest}-2}"
+        fi
+        case "$cmd" in
+            click)     [[ -n "$rest" ]] || { echo "batch:$line_no: falta texto" >&2; return 2; }; cmd_click "$rest" ;;
+            clickid)   [[ -n "$rest" ]] || { echo "batch:$line_no: falta resource ID" >&2; return 2; }; cmd_clickid "$rest" ;;
+            type)      [[ -n "$rest" ]] || { echo "batch:$line_no: falta texto" >&2; return 2; }; cmd_type "$rest" ;;
+            focus)     cmd_focus "$rest" ;;
+            cleartext) cmd_cleartext ;;
+            paste)     cmd_paste ;;
+            back)      cmd_back ;;
+            scroll)    cmd_scroll "${rest:-down}" ;;
+            waittext)
+                expected="$rest"; wait_s=8
+                if [[ "$rest" =~ ^(.+)[[:space:]]+([0-9]{1,2})$ ]]; then
+                    expected="${BASH_REMATCH[1]}"; wait_s="${BASH_REMATCH[2]}"
+                fi
+                cmd_waittext "$expected" "$wait_s"
+                ;;
+            *) echo "batch:$line_no: comando no permitido '$cmd'" >&2; return 2 ;;
+        esac
+        rc=$?
+        if (( rc != 0 )); then echo "batch abortado en línea $line_no ($cmd, rc=$rc)" >&2; return "$rc"; fi
+        count=$((count + 1))
+    done
+    (( count > 0 )) || { echo "amctl batch: no se recibieron pasos" >&2; return 2; }
+    printf 'batch OK: %d pasos\n' "$count"
+}
+
 cmd_shot()       { guard_readonly shot || return $?; local f="${1:-$(shot_file)}"; local i; rm -f "$f" 2>/dev/null; for i in 1 2 3; do bc_raw com.accessdroid.termux.ACTION_SCREENDUMP --ei displayId "$DISPLAY_ID"; wait_file "$f" 2 && break; done; if [[ -f "$f" ]]; then echo "PNG: $f ($(stat -c%s "$f") bytes)"; else echo "(no se guardo el PNG)"; if [[ -f /sdcard/Download/accessdroid-shot-error.txt ]]; then echo "error del servicio:"; cat /sdcard/Download/accessdroid-shot-error.txt; fi; fi; }
 cmd_presskey()   { local k="$1"; local code=0; case "$k" in back) code=4;; home) code=3;; recents) code=187;; *) echo "only back|home|recents supported" >&2; return 1;; esac; bc com.accessdroid.termux.ACTION_PRESS_KEY --ei keyCode "$code"; }
 
@@ -1394,6 +1463,8 @@ case "${1:-help}" in
     tree)      cmd_tree ;;
     snap)      shift; cmd_snap "$@" ;;
     tapref)    cmd_tapref "${2:-}" "${3:-}" ;;
+    waittext)  cmd_waittext "${2:-}" "${3:-8}" ;;
+    batch)     shift; cmd_batch ;;
     tap)       cmd_tap "${2:-}" "${3:-}" "${4:-80}" ;;
     longpress) cmd_longpress "${2:-0}" "${3:-0}" "${4:-500}" ;;
     swipe)     cmd_swipe "${2:-0}" "${3:-0}" "${4:-0}" "${5:-0}" "${6:-300}" ;;

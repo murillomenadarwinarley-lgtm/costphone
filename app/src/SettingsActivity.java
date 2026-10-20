@@ -363,7 +363,6 @@ public class SettingsActivity extends Activity {
 
     private LinearLayout buildInicioPanel() {
         LinearLayout panel = createPanel();
-        panel.addView(pageBanner(R.drawable.ic_home, "COSTPHONE  /  CENTRO DE CONTROL", "Todo tu teléfono, bajo control", "Estado del servicio, acciones rápidas y actividad reciente."), lpMATCH(5));
 
         // chip Shizuku (antes barra fija en header)
         panel.addView(shizukuChip(), lpMATCH(0));
@@ -435,47 +434,19 @@ public class SettingsActivity extends Activity {
 
         panel.addView(statusCard, lpMATCH(12));
 
-        // ── Cuadrícula 2x2 de statTiles con datos REALES ──
-        panel.addView(Ui.sectionHeader(this, R.drawable.ic_pulse, "Estado"), lpMATCH(4));
-
-        android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
-        boolean batteryExcluded = false;
-        if (pm != null && Build.VERSION.SDK_INT >= 23) {
-            batteryExcluded = pm.isIgnoringBatteryOptimizations(getPackageName());
-        }
-        String backend = ShizukuManager.state() == ShizukuManager.READY ? "Shizuku" : "Accesibilidad";
-        String device = Build.MODEL + " · Android " + Build.VERSION.RELEASE;
-
-        LinearLayout g1 = new LinearLayout(this);
-        g1.setOrientation(LinearLayout.HORIZONTAL);
-        g1.addView(Ui.statTile(this, R.drawable.ic_accessibility, "Servicio",
-                        isServiceAvailable() ? "Activo" : "Inactivo"), gridTileLp());
-        g1.addView(Ui.statTile(this, R.drawable.ic_shield, "Backend", backend), gridTileLp());
-        panel.addView(g1, gridRowLp());
-
-        LinearLayout g2 = new LinearLayout(this);
-        g2.setOrientation(LinearLayout.HORIZONTAL);
-        g2.addView(Ui.statTile(this, R.drawable.ic_battery, "Batería",
-                        batteryExcluded ? "Excluida" : "No excluida"), gridTileLp());
-        g2.addView(Ui.statTile(this, R.drawable.ic_phone, "Dispositivo", device), gridTileLp());
-        panel.addView(g2, gridRowLp());
-
         // ── Acciones rápidas: 3 tiles que EJECUTAN ──
         panel.addView(Ui.sectionHeader(this, R.drawable.ic_bolt, "Acciones rápidas"), lpMATCH(4));
 
         LinearLayout qa = new LinearLayout(this);
         qa.setOrientation(LinearLayout.HORIZONTAL);
-        qa.addView(actionTile("Captura", R.drawable.ic_camera, new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                if (isServiceAvailable()) sendScreenshot();
-                else toast("Activa el servicio de accesibilidad primero");
-            }
-        }), gridTileLp());
-        qa.addView(actionTile("Árbol UI", R.drawable.ic_tree, new View.OnClickListener() {
+        qa.addView(actionTile("Leer UI", R.drawable.ic_tree, new View.OnClickListener() {
             @Override public void onClick(View v) {
                 if (isServiceAvailable()) sendGetUiTree();
                 else toast("Activa el servicio de accesibilidad primero");
             }
+        }), gridTileLp());
+        qa.addView(actionTile("Buscar", R.drawable.ic_search, new View.OnClickListener() {
+            @Override public void onClick(View v) { showTab(TAB_INSPECTOR); }
         }), gridTileLp());
         qa.addView(actionTile("Scroll", R.drawable.ic_arrow_down, new View.OnClickListener() {
             @Override public void onClick(View v) {
@@ -485,7 +456,7 @@ public class SettingsActivity extends Activity {
         }), gridTileLp());
         panel.addView(qa, gridRowLp());
 
-        // ── Actividad reciente: últimos 5 eventos + "Ver todo" ──
+        // ── Actividad reciente: últimos 3 eventos + "Ver todo" ──
         LinearLayout recentHeader = Ui.sectionHeader(this, R.drawable.ic_clock, "Actividad reciente");
         TextView verTodo = new TextView(this);
         verTodo.setText("Ver todo");
@@ -506,7 +477,7 @@ public class SettingsActivity extends Activity {
 
         LinearLayout recentCard = Ui.card(this);
         java.util.List<String> recent = ConnectionLog.dump();
-        int start = Math.max(0, recent.size() - 5);
+        int start = Math.max(0, recent.size() - 3);
         if (recent.isEmpty()) {
             TextView none = new TextView(this);
             none.setText("Sin actividad todavía.");
@@ -600,7 +571,6 @@ public class SettingsActivity extends Activity {
 
     private LinearLayout buildControlPanel() {
         LinearLayout panel = createPanel();
-        panel.addView(pageBanner(R.drawable.ic_control, "CONTROL INTERACTIVO", "Control del dispositivo", "Gestos, navegación y escritura reunidos en un solo lugar."), lpMATCH(5));
 
         // ── Gestos ──
         LinearLayout gesturesCard = sectionCard("Gestos", R.drawable.ic_touch);
@@ -874,7 +844,6 @@ public class SettingsActivity extends Activity {
 
     private LinearLayout buildInspectorPanel() {
         LinearLayout panel = createPanel();
-        panel.addView(pageBanner(R.drawable.ic_inspector, "LECTURA DE INTERFAZ", "Explora la pantalla", "Encuentra elementos y consulta la estructura visible de las apps."), lpMATCH(5));
 
         // ── Árbol de accesibilidad ──
         LinearLayout treeCard = sectionCard("Árbol de accesibilidad", R.drawable.ic_tree);
@@ -979,7 +948,6 @@ public class SettingsActivity extends Activity {
 
     private LinearLayout buildRutinasPanel() {
         LinearLayout panel = createPanel();
-        panel.addView(pageBanner(R.drawable.ic_routines, "AUTOMATIZACIÓN", "Tus rutinas, a tu manera", "Organiza secuencias reutilizables y ejecuta tus tareas con menos pasos."), lpMATCH(5));
 
         // ── Rutinas guardadas ──
         LinearLayout listCard = sectionCard("Rutinas guardadas", R.drawable.ic_routines);
@@ -1439,7 +1407,6 @@ public class SettingsActivity extends Activity {
 
     private LinearLayout buildAjustesPanel() {
         LinearLayout panel = createPanel();
-        panel.addView(pageBanner(R.drawable.ic_settings, "SISTEMA  /  DIAGNÓSTICO", "Conexiones y ajustes", "Accesibilidad, batería, Shizuku y registros en un panel coherente."), lpMATCH(5));
 
         // ── Batería: chip de estado real + acción ──
         LinearLayout batCard = sectionCard("Batería", R.drawable.ic_battery);
@@ -1959,93 +1926,6 @@ public class SettingsActivity extends Activity {
     //  BUILDERS DE UI
     // ═══════════════════════════════════════════════════════════════
 
-    private LinearLayout pageBanner(int iconRes, String eyebrow, String headline, String description) {
-        LinearLayout banner = new LinearLayout(this);
-        banner.setOrientation(LinearLayout.HORIZONTAL);
-        banner.setGravity(Gravity.CENTER_VERTICAL);
-        banner.setPadding(dp(17), dp(17), dp(15), dp(17));
-
-        GradientDrawable bannerBackground = new GradientDrawable(
-                GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{Ui.color(this, "hero"), Ui.color(this, "surface")});
-        bannerBackground.setCornerRadius(dp(22));
-        bannerBackground.setStroke(dp(1), Ui.color(this, "outline_accent"));
-        banner.setBackground(bannerBackground);
-        banner.setElevation(dp(3));
-
-        LinearLayout copy = new LinearLayout(this);
-        copy.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout.LayoutParams copyLp = new LinearLayout.LayoutParams(
-                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-        copyLp.rightMargin = dp(11);
-        banner.addView(copy, copyLp);
-
-        LinearLayout overline = new LinearLayout(this);
-        overline.setOrientation(LinearLayout.HORIZONTAL);
-        overline.setGravity(Gravity.CENTER_VERTICAL);
-        overline.setPadding(dp(8), dp(5), dp(9), dp(5));
-        overline.setBackground(rounded((ACCENT_BLUE & 0x00FFFFFF) | 0x1C000000, 999, 0));
-
-        View dot = new View(this);
-        dot.setBackground(rounded(ACCENT_BLUE, 999, 0));
-        LinearLayout.LayoutParams dotLp = new LinearLayout.LayoutParams(dp(6), dp(6));
-        dotLp.rightMargin = dp(6);
-        overline.addView(dot, dotLp);
-
-        TextView eyebrowView = new TextView(this);
-        eyebrowView.setText(eyebrow);
-        eyebrowView.setTextSize(8.5f);
-        eyebrowView.setLetterSpacing(0.055f);
-        eyebrowView.setTextColor(ACCENT_BLUE);
-        eyebrowView.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-        eyebrowView.setMaxLines(1);
-        eyebrowView.setEllipsize(TextUtils.TruncateAt.END);
-        overline.addView(eyebrowView);
-        copy.addView(overline, lpWRAP(0));
-
-        TextView titleView = new TextView(this);
-        titleView.setText(headline);
-        titleView.setTextSize(21);
-        titleView.setTextColor(TEXT_MAIN);
-        titleView.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
-        titleView.setLineSpacing(dp(1), 1.0f);
-        titleView.setMaxLines(2);
-        titleView.setEllipsize(TextUtils.TruncateAt.END);
-        LinearLayout.LayoutParams titleLp = lpMATCH(8);
-        copy.addView(titleView, titleLp);
-
-        TextView descriptionView = new TextView(this);
-        descriptionView.setText(description);
-        descriptionView.setTextSize(12);
-        descriptionView.setTextColor(TEXT_DIM);
-        descriptionView.setLineSpacing(dp(3), 1.0f);
-        descriptionView.setMaxLines(3);
-        descriptionView.setEllipsize(TextUtils.TruncateAt.END);
-        copy.addView(descriptionView, lpMATCH(6));
-
-        LinearLayout iconShell = new LinearLayout(this);
-        iconShell.setGravity(Gravity.CENTER);
-        GradientDrawable iconBg = new GradientDrawable(
-                GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{(ACCENT_BLUE & 0x00FFFFFF) | 0x26000000,
-                        (ACCENT_GREEN & 0x00FFFFFF) | 0x16000000});
-        iconBg.setCornerRadius(dp(17));
-        iconBg.setStroke(dp(1), Ui.color(this, "outline_accent"));
-        iconShell.setBackground(iconBg);
-        iconShell.setElevation(dp(2));
-
-        ImageView icon = new ImageView(this);
-        icon.setImageResource(iconRes);
-        icon.setColorFilter(ACCENT_BLUE);
-        icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        iconShell.addView(icon, new LinearLayout.LayoutParams(dp(29), dp(29)));
-        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(dp(54), dp(58));
-        iconLp.leftMargin = dp(1);
-        banner.addView(iconShell, iconLp);
-
-        return banner;
-    }
-
     private LinearLayout createPanel() {
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
@@ -2056,19 +1936,16 @@ public class SettingsActivity extends Activity {
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setPadding(dp(18), dp(14), dp(14), dp(14));
-        GradientDrawable headerBg = new GradientDrawable(
-                GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{Ui.color(this, "hero"), BG_DARK});
-        header.setBackground(headerBg);
-        header.setMinimumHeight(dp(76));
+        header.setPadding(dp(16), dp(6), dp(12), dp(6));
+        header.setBackgroundColor(BG_DARK);
+        header.setMinimumHeight(dp(60));
 
         ImageView logo = new ImageView(this);
         logo.setImageResource(R.mipmap.ic_launcher);
         logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        logo.setPadding(dp(4), dp(4), dp(4), dp(4));
-        logo.setBackground(Ui.shape(this, "surface2", 15f, "outline_accent", 1f));
-        header.addView(logo, new LinearLayout.LayoutParams(dp(46), dp(46)));
+        logo.setPadding(dp(3), dp(3), dp(3), dp(3));
+        logo.setBackground(Ui.shape(this, "surface2", 12f, "outline_accent", 1f));
+        header.addView(logo, new LinearLayout.LayoutParams(dp(40), dp(40)));
 
         LinearLayout titleBlock = new LinearLayout(this);
         titleBlock.setOrientation(LinearLayout.VERTICAL);
@@ -2077,7 +1954,7 @@ public class SettingsActivity extends Activity {
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
         TextView title = new TextView(this);
-        title.setTextSize(21);
+        title.setTextSize(19);
         title.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         android.text.SpannableString span = new android.text.SpannableString("CostPhone");
         span.setSpan(new android.text.style.ForegroundColorSpan(TEXT_MAIN), 0, 4,
@@ -2103,7 +1980,7 @@ public class SettingsActivity extends Activity {
         LinearLayout statusChip = new LinearLayout(this);
         statusChip.setOrientation(LinearLayout.HORIZONTAL);
         statusChip.setGravity(Gravity.CENTER_VERTICAL);
-        statusChip.setPadding(dp(9), dp(7), dp(10), dp(7));
+        statusChip.setPadding(dp(7), dp(5), dp(8), dp(5));
         statusChip.setBackground(Ui.shape(this, "surface2", 999f, "border", 1f));
 
         headerDot = new View(this);
@@ -2128,15 +2005,15 @@ public class SettingsActivity extends Activity {
         ImageView gear = new ImageView(this);
         gear.setImageResource(R.drawable.ic_settings);
         gear.setColorFilter(TEXT_DIM);
-        gear.setPadding(dp(11), dp(11), dp(11), dp(11));
-        gear.setMinimumHeight(dp(46));
-        gear.setMinimumWidth(dp(46));
+        gear.setPadding(dp(9), dp(9), dp(9), dp(9));
+        gear.setMinimumHeight(dp(48));
+        gear.setMinimumWidth(dp(48));
         gear.setBackground(Ui.shape(this, "surface2", 14f, "border", 1f));
         gear.setContentDescription("Abrir ajustes");
         gear.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { showTab(TAB_AJUSTES); }
         });
-        header.addView(gear, new LinearLayout.LayoutParams(dp(46), dp(46)));
+        header.addView(gear, new LinearLayout.LayoutParams(dp(48), dp(48)));
         return header;
     }
 

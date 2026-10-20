@@ -18,6 +18,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate automation scripts
+        run: |
+          bash -n termux/amctl
+          python3 -m py_compile termux/amctl-snap.py
+
       - name: Set up JDK 17 (Temurin)
         uses: actions/setup-java@v4
         with:

@@ -334,8 +334,8 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                     if (root != null) {
                         AccessibilityNodeInfo target = findByText(root, txt);
                         if (target != null) {
-                            boolean ok = target.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-                            Log.i(TAG, "click '" + txt + "' → " + ok);
+                            boolean ok = clickNodeOrAncestor(target);
+                            Log.i(TAG, "click '" + txt + "' (incluye contenedor) → " + ok);
                         }
                     }
                 }
@@ -349,8 +349,8 @@ public class AccessibilityServiceImpl extends AccessibilityService {
                     if (root != null) {
                         List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByViewId(rid);
                         if (!nodes.isEmpty()) {
-                            boolean ok = nodes.get(0).performAction(AccessibilityNodeInfo.ACTION_CLICK);
-                            Log.i(TAG, "click id=" + rid + " → " + ok);
+                            boolean ok = clickNodeOrAncestor(nodes.get(0));
+                            Log.i(TAG, "click id=" + rid + " (incluye contenedor) → " + ok);
                         } else {
                             Log.w(TAG, "find id=" + rid + " → no encontrado");
                         }
@@ -1090,6 +1090,28 @@ public class AccessibilityServiceImpl extends AccessibilityService {
             sb.append(line).append('\n');
         }
         return sb.toString();
+    }
+
+    /**
+     * Intenta accionar el nodo encontrado y después sube por sus contenedores.
+     * Muchas apps asignan el listener a la fila o tarjeta, no al TextView cuyo
+     * texto ve el agente. Así se evita calcular coordenadas a partir de capturas.
+     */
+    private boolean clickNodeOrAncestor(AccessibilityNodeInfo target) {
+        if (target == null) return false;
+        AccessibilityNodeInfo current = AccessibilityNodeInfo.obtain(target);
+        for (int depth = 0; current != null && depth < 8; depth++) {
+            if (current.isEnabled()
+                    && current.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                current.recycle();
+                return true;
+            }
+            AccessibilityNodeInfo parent = current.getParent();
+            current.recycle();
+            current = parent;
+        }
+        if (current != null) current.recycle();
+        return false;
     }
 
     private AccessibilityNodeInfo findByText(AccessibilityNodeInfo node, String text) {

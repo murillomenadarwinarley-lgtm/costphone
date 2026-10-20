@@ -10,18 +10,31 @@ con el servicio de accesibilidad CostPhone (com.accessdroid.termux) e incluye
 el `secret` automáticamente. Opcionalmente usa una **sesión rish (Shizuku)**
 para ir más rápido; sin ella todo funciona igual por el broadcasts de `am`.
 
-## El bucle central (igual filosofía que agent-browser)
+## Flujo rápido: semántico primero, captura solo como último recurso
 
-```
-amctl launch <package.name>   # 1. abrir la app
-amctl snap                    # 2. ver elementos interactivos con refs @p1, @p2...
-amctl tapref @p3              # 3. actuar por referencia
-amctl snap                    # 4. RE-SNAPSHOT tras cualquier cambio de pantalla
+No uses capturas para localizar botones como comportamiento normal. El orden
+preferido es **resource-id → texto visible → snapshot textual → screenshot solo
+si el árbol de accesibilidad no expone el control**. Android ya puede encontrar
+muchos elementos y pulsarlos directamente; evita estimar píxeles.
+
+```bash
+# Selector conocido: no requiere snap ni screenshot
+amctl clickid com.whatsapp:id/entry
+amctl type "Hola"
+amctl clickid com.whatsapp:id/send
+amctl waittext "Hola" 8
+
+# Sin ID conocido, intenta texto visible
+amctl click "Enviar"
+
+# Para descubrir controles desconocidos, usa texto, no PNG
+amctl snap --filter "Enviar"
 ```
 
-Las refs se asignan frescas en cada `snap` y **quedan obsoletas en cuanto la
-pantalla cambia** (navegar, abrir un diálogo, teclado, etc.). Antes de cada
-acción por ref: re-snapshot.
+Las refs `@pN` son del último `snap` y caducan al cambiar la pantalla. Úsalas
+solo cuando no exista un ID/texto estable; no fuerces un snapshot entre acciones
+si los selectores conocidos siguen siendo válidos. Verifica al final o espera
+una condición útil, no después de cada toque.
 
 ## Leer la pantalla
 
@@ -52,7 +65,9 @@ Cuando falla `see`, el motivo exacto queda en
 | `amctl swipe X1 Y1 X2 Y2 [ms]` | Deslizar/arrastrar |
 | `amctl scroll down\|up [x y]` | Scroll |
 | `amctl click "texto"` | Click por texto visible (fallback sin snapshot) |
-| `amctl clickid <id>` | Click por resource-id (p.ej. `com.whatsapp:id/send`) |
+| `amctl clickid <id>` | Acción accesible por resource-id (p.ej. `com.whatsapp:id/send`) |
+| `amctl waittext "texto" [segundos]` | Espera sin PNG hasta que el texto aparezca en el árbol UI (1–20 s) |
+| `amctl batch` | Ejecuta pasos allow-listed desde stdin; la guardia sigue activa por acción |
 | `amctl type "texto"` | Escribe en el campo con foco ([edt][FOCUS] en snap). **REEMPLAZA todo el contenido** (setText), desconocido no appenda |
 | `amctl cleartext` | Vacía el campo con foco |
 | `amctl paste` | Pega el clipboard en el campo con foco |
@@ -68,27 +83,39 @@ Cuando falla `see`, el motivo exacto queda en
 | `amctl input keyevent back\|home\|recents\|enter\|<código>` | Tecla por rish (sólo `home` evita la guardia) |
 | `amctl screencap [/sdcard/.../x.png]` | Captura vía rish |
 
-Para escribir: `tapref` al campo `[edt]` (o `clickid ...entry`) → `amctl type` →
-`tapref` al botón enviar (`'Enviar'` / `#send`) → `snap` para verificar.
+Para encadenar operaciones sin intervención del agente entre cada paso, usa
+un lote limitado (sin `eval` ni shell arbitrario):
 
-Para navegar (Chrome/otro navegador): SIEMPRE primero
-`amctl openurl "https://..."` — saltarse el omnibox evita autocompletados,
-Enter fallido a ciegas, y páginas erróneas. Solo recurrir a snap URL+type si
-openurl no existiera.
+```bash
+amctl batch <<'EOF'
+clickid com.whatsapp:id/entry
+type Respuesta preparada
+clickid com.whatsapp:id/send
+waittext Respuesta preparada 8
+EOF
+```
+
+El lote acepta `click`, `clickid`, `type`, `focus`, `cleartext`, `paste`,
+`back`, `scroll` y `waittext`. La guardia de primer plano sigue activa por
+acción; un error detiene el lote. No se necesitan capturas en el ciclo normal.
+
+Para navegar (Chrome/otro navegador), usa primero `amctl openurl "https://..."`
+para evitar el omnibox. Recurre a `amctl see` solo cuando el árbol no muestre los
+controles o necesites contenido visual no expuesto como texto.
 
 ## Ejemplo real verificado (WhatsApp)
 
 ```bash
-amctl launch com.whatsapp && sleep 6
-amctl snap                       # @p1 [EditText] 'Preguntar a Meta AI...' ...
-                                 # fila del primer chat = ViewGroup clicable con nombre concatenado
-amctl tapref @p3                 # abre el primer chat
-amctl snap                       # confirmar conversación abierta (conversation_contact_name)
-amctl clickid com.whatsapp:id/entry
-amctl type "No"
-amctl snap                       # ver la ref del botón 'Enviar'
-amctl tapref @pN                 # (o: amctl clickid com.whatsapp:id/send)
-amctl snap                       # verificar que el mensaje salió
+amctl launch com.whatsapp
+amctl waittext "Preguntar a Meta AI" 12
+amctl snap                       # solo aquí hace falta identificar el chat correcto
+# Tras entrar en el chat correcto:
+amctl batch <<'EOF'
+clickid com.whatsapp:id/entry
+type No
+clickid com.whatsapp:id/send
+waittext No 8
+EOF
 ```
 
 ## Sesión rish (Shizuku) — opcional y la abre el usuario
