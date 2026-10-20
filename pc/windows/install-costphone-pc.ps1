@@ -26,11 +26,14 @@ if (Test-Path -LiteralPath $jsoncPath) {
 $installRoot = Join-Path $env:LOCALAPPDATA "CostPhonePC"
 $engineDir = Join-Path $installRoot "engine"
 New-Item -ItemType Directory -Path $engineDir -Force | Out-Null
+$skillSourceDir = Join-Path $installRoot "skill"
+New-Item -ItemType Directory -Path $skillSourceDir -Force | Out-Null
 $baseUrl = "https://raw.githubusercontent.com/murillomenadarwinarley-lgtm/costphone/engine/costphone-engine-v0"
 $downloadFiles = @(
   @{ Relative = "engine/windows_engine.py"; Destination = (Join-Path $engineDir "windows_engine.py") },
   @{ Relative = "engine/windows_mcp_server.py"; Destination = (Join-Path $engineDir "windows_mcp_server.py") },
-  @{ Relative = "engine/requirements-windows.txt"; Destination = (Join-Path $engineDir "requirements-windows.txt") }
+  @{ Relative = "engine/requirements-windows.txt"; Destination = (Join-Path $engineDir "requirements-windows.txt") },
+  @{ Relative = "skill/costphone-pc/SKILL.md"; Destination = (Join-Path $skillSourceDir "SKILL.md") }
 )
 foreach ($file in $downloadFiles) {
   $url = "$baseUrl/$($file.Relative)"
@@ -94,6 +97,16 @@ if ($hadConfig) {
 $json = $config | ConvertTo-Json -Depth 100
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 [System.IO.File]::WriteAllText($jsonPath, $json + [Environment]::NewLine, $utf8NoBom)
+
+$skillTargetDir = Join-Path $configDir "skills\costphone-pc"
+$skillTarget = Join-Path $skillTargetDir "SKILL.md"
+New-Item -ItemType Directory -Path $skillTargetDir -Force | Out-Null
+if (Test-Path -LiteralPath $skillTarget) {
+  $skillBackup = "$skillTarget.costphone-backup-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+  Copy-Item -LiteralPath $skillTarget -Destination $skillBackup
+  Write-Host "Copia de seguridad del skill anterior: $skillBackup"
+}
+Copy-Item -LiteralPath (Join-Path $skillSourceDir "SKILL.md") -Destination $skillTarget -Force
 
 Write-Host ""
 Write-Host "CostPhone PC nativo quedó instalado." -ForegroundColor Green
