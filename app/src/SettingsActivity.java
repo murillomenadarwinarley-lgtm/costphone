@@ -39,6 +39,7 @@ public class SettingsActivity extends Activity {
     private int TEXT_MAIN, TEXT_DIM, TEXT_MUTED, LOG_BG, DIVIDER;
     private static final int CARD_RADIUS  = 20;
     private static final int STATUS_RADIUS= 999;
+    private static final int MAX_LOG_ROWS = 80;
 
     private static final String SECRET = "termux-accessdroid-2025";
     private static final String PREFS_NAME = "costphone_prefs";
@@ -160,17 +161,8 @@ public class SettingsActivity extends Activity {
         root.addView(contentScroll, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        panelInicio = buildInicioPanel();
-        panelControl = buildControlPanel();
-        panelInspector = buildInspectorPanel();
-        panelRutinas = buildRutinasPanel();
-        panelAjustes = buildAjustesPanel();
-
-        contentArea.addView(panelInicio);
-        contentArea.addView(panelControl);
-        contentArea.addView(panelInspector);
-        contentArea.addView(panelRutinas);
-        contentArea.addView(panelAjustes);
+        // Carga diferida: no construir todas las pantallas y sus listas al arrancar.
+        // showTab() crea cada panel la primera vez que se necesita.
 
         final View tabBar = buildTabBar();
         LinearLayout.LayoutParams navLayout = lpMATCH(0);
@@ -359,12 +351,35 @@ public class SettingsActivity extends Activity {
         return item;
     }
 
+    private void ensureTabPanel(int index) {
+        switch (index) {
+            case TAB_INICIO:
+                if (panelInicio == null) { panelInicio = buildInicioPanel(); contentArea.addView(panelInicio); }
+                break;
+            case TAB_CONTROL:
+                if (panelControl == null) { panelControl = buildControlPanel(); contentArea.addView(panelControl); }
+                break;
+            case TAB_INSPECTOR:
+                if (panelInspector == null) { panelInspector = buildInspectorPanel(); contentArea.addView(panelInspector); }
+                break;
+            case TAB_RUTINAS:
+                if (panelRutinas == null) { panelRutinas = buildRutinasPanel(); contentArea.addView(panelRutinas); }
+                break;
+            case TAB_AJUSTES:
+                if (panelAjustes == null) { panelAjustes = buildAjustesPanel(); contentArea.addView(panelAjustes); }
+                break;
+            default:
+                return;
+        }
+    }
+
     private void showTab(int index) {
-        panelInicio.setVisibility(index == TAB_INICIO ? View.VISIBLE : View.GONE);
-        panelControl.setVisibility(index == TAB_CONTROL ? View.VISIBLE : View.GONE);
-        panelInspector.setVisibility(index == TAB_INSPECTOR ? View.VISIBLE : View.GONE);
-        panelRutinas.setVisibility(index == TAB_RUTINAS ? View.VISIBLE : View.GONE);
-        panelAjustes.setVisibility(index == TAB_AJUSTES ? View.VISIBLE : View.GONE);
+        ensureTabPanel(index);
+        if (panelInicio != null) panelInicio.setVisibility(index == TAB_INICIO ? View.VISIBLE : View.GONE);
+        if (panelControl != null) panelControl.setVisibility(index == TAB_CONTROL ? View.VISIBLE : View.GONE);
+        if (panelInspector != null) panelInspector.setVisibility(index == TAB_INSPECTOR ? View.VISIBLE : View.GONE);
+        if (panelRutinas != null) panelRutinas.setVisibility(index == TAB_RUTINAS ? View.VISIBLE : View.GONE);
+        if (panelAjustes != null) panelAjustes.setVisibility(index == TAB_AJUSTES ? View.VISIBLE : View.GONE);
 
         styleTab(tabInicio, index == TAB_INICIO);
         styleTab(tabControl, index == TAB_CONTROL);
@@ -1710,6 +1725,15 @@ public class SettingsActivity extends Activity {
             empty.setPadding(dp(4), dp(4), dp(4), dp(4));
             ajustesLogContainer.addView(empty);
             return;
+        }
+        if (lines.size() > MAX_LOG_ROWS) {
+            lines = new ArrayList<>(lines.subList(lines.size() - MAX_LOG_ROWS, lines.size()));
+            TextView note = new TextView(this);
+            note.setText("Mostrando los últimos " + MAX_LOG_ROWS + " eventos.");
+            note.setTextSize(11);
+            note.setTextColor(TEXT_MUTED);
+            note.setPadding(dp(4), dp(2), dp(4), dp(8));
+            ajustesLogContainer.addView(note, lpMATCH(0));
         }
         for (String line : lines) {
             String hora = line.length() >= 8 ? line.substring(0, 8) : "";
