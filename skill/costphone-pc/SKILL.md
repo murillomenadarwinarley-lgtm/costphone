@@ -10,7 +10,7 @@ This MCP controls the Windows desktop on the same PC where OpenCode is running. 
 ## Safe interaction loop
 
 1. Call desktop_inspect to identify the foreground application, then call desktop_inspect_controls to read its visible Windows UI Automation controls. Use desktop_screenshot when labels are unclear, a control is not exposed, or you need visual context.
-2. Prefer desktop_inspect_controls selectors (name, automation_id, control_type, occurrence) to coordinate clicking. A selector is fresh only for the current foreground window; if a control is not found or the app changes, inspect the window and controls again.
+2. Prefer desktop_inspect_controls selectors (name, automation_id, control_type, occurrence) to coordinate clicking. Every selector is bound to a window_handle and process_id. The motor rejects a selector if the foreground window changes before acting. If a control is not found or the app changes, inspect the window and controls again; do not reconstruct selectors without these scope values.
 3. Use desktop_click_control for an exact UI Automation target. If the application exposes no usable controls, fall back to desktop_screenshot followed by desktop_click at coordinates from that recent screenshot.
 4. Use desktop_set_control_text only for controls Windows identifies as Edit fields. It requires explicit input permission and refuses elements identified as password fields. Confirm that the target field is correct before writing.
 5. For generic typing, desktop_type_text pastes Unicode text to the focused control. Verify the focused field before using it. The previous clipboard text is restored when possible.
