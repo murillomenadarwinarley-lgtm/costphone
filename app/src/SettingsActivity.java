@@ -109,7 +109,7 @@ public class SettingsActivity extends Activity {
         BG_CARD_ALT  = Ui.color(this, "surface2");
         BG_INPUT     = Ui.color(this, "surface");
         ACCENT_BLUE  = Ui.color(this, "accent");
-        ACCENT_GREEN = Ui.color(this, "accent");
+        ACCENT_GREEN = Ui.color(this, "ok");
         ACCENT_RED   = Ui.color(this, "error");
         ACCENT_AMBER = Ui.color(this, "aviso");
         ACCENT_VIOLET= Ui.color(this, "accent2");
@@ -140,7 +140,7 @@ public class SettingsActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
         contentArea = new LinearLayout(this);
         contentArea.setOrientation(LinearLayout.VERTICAL);
-        contentArea.setPadding(dp(16), dp(8), dp(16), dp(8));
+        contentArea.setPadding(dp(20), dp(12), dp(20), dp(18));
         contentScroll.addView(contentArea);
         root.addView(contentScroll, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
@@ -158,7 +158,9 @@ public class SettingsActivity extends Activity {
         contentArea.addView(panelAjustes);
 
         final View tabBar = buildTabBar();
-        root.addView(tabBar, lpMATCH(0));
+        LinearLayout.LayoutParams navLayout = lpMATCH(0);
+        navLayout.setMargins(dp(14), dp(6), dp(14), dp(8));
+        root.addView(tabBar, navLayout);
 
         android.widget.FrameLayout.LayoutParams outerLp = new android.widget.FrameLayout.LayoutParams(
                 android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
@@ -271,7 +273,9 @@ public class SettingsActivity extends Activity {
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setBackground(getResources().getDrawable(R.drawable.bg_tab_bar));
-        bar.setPadding(dp(6), dp(6), dp(6), dp(8));
+        bar.setPadding(dp(7), dp(6), dp(7), dp(6));
+        bar.setElevation(dp(8));
+        bar.setClipToOutline(true);
 
         tabInicio    = tabButton("Inicio",    R.drawable.ic_home,     TAB_INICIO);
         tabControl   = tabButton("Control",   R.drawable.ic_control,  TAB_CONTROL);
@@ -300,7 +304,7 @@ public class SettingsActivity extends Activity {
         LinearLayout item = new LinearLayout(this);
         item.setOrientation(LinearLayout.VERTICAL);
         item.setGravity(Gravity.CENTER);
-        item.setPadding(dp(4), dp(8), dp(4), dp(8));
+        item.setPadding(dp(3), dp(7), dp(3), dp(7));
         item.setTag(index);
 
         ImageView icon = new ImageView(this);
@@ -343,12 +347,13 @@ public class SettingsActivity extends Activity {
         LinearLayout item = (LinearLayout) tab;
         // píldora translúcida DETRÁS de icono+etiqueta (fondo, no cubre)
         item.setBackgroundResource(active ? R.drawable.bg_tab_active : 0);
-        int fg = active ? ACCENT_GREEN : TEXT_MUTED;
+        int fg = active ? ACCENT_BLUE : TEXT_MUTED;
         if (item.getChildCount() > 0 && item.getChildAt(0) instanceof ImageView) {
             ((ImageView) item.getChildAt(0)).setColorFilter(fg);
         }
         if (item.getChildCount() > 1 && item.getChildAt(1) instanceof TextView) {
             ((TextView) item.getChildAt(1)).setTextColor(fg);
+            ((TextView) item.getChildAt(1)).setTypeface(Typeface.create("sans-serif-medium", active ? Typeface.BOLD : Typeface.NORMAL));
         }
     }
 
@@ -532,29 +537,37 @@ public class SettingsActivity extends Activity {
         LinearLayout tile = new LinearLayout(this);
         tile.setOrientation(LinearLayout.VERTICAL);
         tile.setGravity(Gravity.CENTER);
-        tile.setPadding(dp(8), dp(14), dp(8), dp(14));
-        tile.setBackground(Ui.shape(this, "surface2", 14f, "border", 1f));
-        tile.setMinimumHeight(dp(80));
+        tile.setPadding(dp(7), dp(13), dp(7), dp(13));
+        tile.setBackground(Ui.ripple(this,
+                Ui.shape(this, "surface2", 15f, "border", 1f),
+                Ui.shape(this, "surface2", 15f, null, 0),
+                (ACCENT_BLUE & 0x00FFFFFF) | 0x2D000000));
+        tile.setMinimumHeight(dp(88));
+        tile.setClickable(true);
+        tile.setFocusable(true);
         tile.setOnClickListener(onClick);
 
+        LinearLayout iconShell = new LinearLayout(this);
+        iconShell.setGravity(Gravity.CENTER);
+        iconShell.setBackground(Ui.shape(this, "surface", 11f, "border", 1f));
         ImageView icon = new ImageView(this);
         icon.setImageResource(iconRes);
         icon.setColorFilter(ACCENT_BLUE);
-        tile.addView(icon, new LinearLayout.LayoutParams(dp(24), dp(24)));
+        iconShell.addView(icon, new LinearLayout.LayoutParams(dp(20), dp(20)));
+        tile.addView(iconShell, new LinearLayout.LayoutParams(dp(36), dp(36)));
 
         TextView tv = new TextView(this);
         tv.setText(label);
-        tv.setTextSize(12);
+        tv.setTextSize(11);
         tv.setTextColor(TEXT_MAIN);
-        tv.setTypeface(Typeface.DEFAULT_BOLD);
+        tv.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         tv.setGravity(Gravity.CENTER);
-        tv.setMaxLines(1);
+        tv.setMaxLines(2);
         tv.setEllipsize(TextUtils.TruncateAt.END);
         LinearLayout.LayoutParams tvlp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        tvlp.topMargin = dp(6);
+        tvlp.topMargin = dp(7);
         tile.addView(tv, tvlp);
-
         return tile;
     }
 
@@ -1091,8 +1104,8 @@ public class SettingsActivity extends Activity {
             btnEdit.setText("Ver/Editar");
             btnEdit.setAllCaps(false);
             btnEdit.setTextSize(11);
-            btnEdit.setTextColor(0xFFFFFFFF);
-            btnEdit.setBackground(rounded(ACCENT_BLUE, 8, 0));
+            btnEdit.setTextColor(Ui.color(this, "on_accent"));
+            btnEdit.setBackground(rounded(ACCENT_BLUE, 11, 0));
             btnEdit.setPadding(dp(10), dp(6), dp(10), dp(6));
             btnEdit.setMinimumHeight(dp(48));
             btnEdit.setOnClickListener(new View.OnClickListener() {
@@ -1106,8 +1119,8 @@ public class SettingsActivity extends Activity {
             btnRun.setText("Ejecutar");
             btnRun.setAllCaps(false);
             btnRun.setTextSize(11);
-            btnRun.setTextColor(0xFFFFFFFF);
-            btnRun.setBackground(rounded(ACCENT_GREEN, 8, 0));
+            btnRun.setTextColor(Ui.color(this, "on_accent"));
+            btnRun.setBackground(rounded(ACCENT_GREEN, 11, 0));
             btnRun.setPadding(dp(10), dp(6), dp(10), dp(6));
             btnRun.setMinimumHeight(dp(48));
             btnRun.setOnClickListener(new View.OnClickListener() {
@@ -1943,28 +1956,29 @@ public class SettingsActivity extends Activity {
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setPadding(dp(16), dp(10), dp(16), dp(10));
-        header.setBackgroundColor(BG_DARK);
-        header.setMinimumHeight(dp(64));
+        header.setPadding(dp(18), dp(14), dp(14), dp(14));
+        GradientDrawable headerBg = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{Ui.color(this, "hero"), BG_DARK});
+        header.setBackground(headerBg);
+        header.setMinimumHeight(dp(76));
 
         ImageView logo = new ImageView(this);
         logo.setImageResource(R.mipmap.ic_launcher);
-        logo.setPadding(dp(6), dp(6), dp(6), dp(6));
-        logo.setBackground(Ui.shape(this, "surface2", 12f, "border", 1f));
-        logo.setLayoutParams(new LinearLayout.LayoutParams(dp(40), dp(40)));
-        header.addView(logo);
+        logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        logo.setPadding(dp(4), dp(4), dp(4), dp(4));
+        logo.setBackground(Ui.shape(this, "surface2", 15f, "outline_accent", 1f));
+        header.addView(logo, new LinearLayout.LayoutParams(dp(46), dp(46)));
 
         LinearLayout titleBlock = new LinearLayout(this);
         titleBlock.setOrientation(LinearLayout.VERTICAL);
-        titleBlock.setPadding(dp(12), dp(0), dp(0), dp(0));
+        titleBlock.setPadding(dp(11), 0, 0, 0);
         titleBlock.setLayoutParams(new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
-        // "Cost" blanco + "Phone" en acento
         TextView title = new TextView(this);
-        title.setText("CostPhone");
-        title.setTextSize(18);
-        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setTextSize(21);
+        title.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         android.text.SpannableString span = new android.text.SpannableString("CostPhone");
         span.setSpan(new android.text.style.ForegroundColorSpan(TEXT_MAIN), 0, 4,
                 android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
@@ -1974,30 +1988,32 @@ public class SettingsActivity extends Activity {
         titleBlock.addView(title);
 
         TextView sub = new TextView(this);
-        sub.setText("Control remoto de Android");
-        sub.setTextSize(11);
+        sub.setText("CONTROL LOCAL · ANDROID");
+        sub.setTextSize(9);
+        sub.setLetterSpacing(0.08f);
         sub.setTextColor(TEXT_DIM);
         sub.setSingleLine(true);
         sub.setEllipsize(TextUtils.TruncateAt.END);
-        titleBlock.addView(sub);
-
+        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        subLp.topMargin = dp(3);
+        titleBlock.addView(sub, subLp);
         header.addView(titleBlock);
 
-        // chip de estado (punto + Conectado/Desconectado)
         LinearLayout statusChip = new LinearLayout(this);
         statusChip.setOrientation(LinearLayout.HORIZONTAL);
         statusChip.setGravity(Gravity.CENTER_VERTICAL);
-        statusChip.setPadding(dp(8), dp(4), dp(8), dp(4));
-        statusChip.setBackground(Ui.shape(this, "surface2", 999f, null, 0));
+        statusChip.setPadding(dp(9), dp(7), dp(10), dp(7));
+        statusChip.setBackground(Ui.shape(this, "surface2", 999f, "border", 1f));
 
         headerDot = new View(this);
         headerDot.setBackground(rounded(TEXT_MUTED, STATUS_RADIUS, 0));
-        statusChip.addView(headerDot, lp(dp(8), dp(8), 0));
+        statusChip.addView(headerDot, lp(dp(7), dp(7), 0));
 
         headerStatusText = new TextView(this);
-        headerStatusText.setTextSize(11);
+        headerStatusText.setTextSize(10);
         headerStatusText.setTextColor(TEXT_DIM);
-        headerStatusText.setTypeface(Typeface.DEFAULT_BOLD);
+        headerStatusText.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         headerStatusText.setSingleLine(true);
         LinearLayout.LayoutParams hstlp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -2009,18 +2025,18 @@ public class SettingsActivity extends Activity {
         sclp.rightMargin = dp(8);
         header.addView(statusChip, sclp);
 
-        // engranaje que abre Ajustes
         ImageView gear = new ImageView(this);
         gear.setImageResource(R.drawable.ic_settings);
         gear.setColorFilter(TEXT_DIM);
-        gear.setPadding(dp(10), dp(10), dp(10), dp(10));
-        gear.setMinimumHeight(dp(48));
-        gear.setMinimumWidth(dp(48));
+        gear.setPadding(dp(11), dp(11), dp(11), dp(11));
+        gear.setMinimumHeight(dp(46));
+        gear.setMinimumWidth(dp(46));
+        gear.setBackground(Ui.shape(this, "surface2", 14f, "border", 1f));
+        gear.setContentDescription("Abrir ajustes");
         gear.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { showTab(TAB_AJUSTES); }
         });
-        header.addView(gear);
-
+        header.addView(gear, new LinearLayout.LayoutParams(dp(46), dp(46)));
         return header;
     }
 
@@ -2050,7 +2066,7 @@ public class SettingsActivity extends Activity {
         badge.setTextColor(ACCENT_BLUE);
         badge.setTypeface(Typeface.DEFAULT_BOLD);
         badge.setPadding(dp(6), dp(2), dp(6), dp(2));
-        badge.setBackground(rounded(0x1A1FBF8F, 4, 0));
+        badge.setBackground(rounded((ACCENT_GREEN & 0x00FFFFFF) | 0x25000000, 7, 0));
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         blp.rightMargin = dp(8);
@@ -2059,9 +2075,9 @@ public class SettingsActivity extends Activity {
         btnShizuku = new Button(this);
         btnShizuku.setAllCaps(false);
         btnShizuku.setTextSize(12);
-        btnShizuku.setTextColor(0xFFFFFFFF);
+        btnShizuku.setTextColor(Ui.color(this, "on_accent"));
         btnShizuku.setTypeface(Typeface.DEFAULT_BOLD);
-        btnShizuku.setBackground(rounded(ACCENT_BLUE, 8, 0));
+        btnShizuku.setBackground(rounded(ACCENT_BLUE, 12, 0));
         btnShizuku.setPadding(dp(14), dp(12), dp(14), dp(12));
         btnShizuku.setMinimumHeight(dp(48));
         btnShizuku.setStateListAnimator(null);
@@ -2073,10 +2089,17 @@ public class SettingsActivity extends Activity {
     private LinearLayout sectionCard(String title, int iconRes, View trailing) {
         LinearLayout card = sectionCard(title, iconRes);
         LinearLayout header = (LinearLayout) card.getChildAt(0);
-        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
+        if (header.getChildCount() > 1 && header.getChildAt(1) instanceof TextView) {
+            TextView titleView = (TextView) header.getChildAt(1);
+            LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            titleLp.leftMargin = dp(11);
+            titleView.setLayoutParams(titleLp);
+        }
+        LinearLayout.LayoutParams trailingLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        tlp.leftMargin = dp(8);
-        header.addView(trailing, tlp);
+        trailingLp.leftMargin = dp(8);
+        header.addView(trailing, trailingLp);
         return card;
     }
 
@@ -2084,32 +2107,36 @@ public class SettingsActivity extends Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setBackground(getResources().getDrawable(R.drawable.bg_card));
-        card.setPadding(dp(16), dp(16), dp(16), dp(16));
+        card.setPadding(dp(17), dp(17), dp(17), dp(18));
+        card.setElevation(dp(1));
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
 
+        LinearLayout iconShell = new LinearLayout(this);
+        iconShell.setGravity(Gravity.CENTER);
+        iconShell.setBackground(Ui.shape(this, "surface2", 11f, "outline_accent", 1f));
         ImageView icon = new ImageView(this);
         icon.setImageResource(iconRes);
-        icon.setColorFilter(ACCENT_GREEN);
-        header.addView(icon, new LinearLayout.LayoutParams(dp(20), dp(20)));
+        icon.setColorFilter(ACCENT_BLUE);
+        iconShell.addView(icon, new LinearLayout.LayoutParams(dp(19), dp(19)));
+        header.addView(iconShell, new LinearLayout.LayoutParams(dp(36), dp(36)));
 
         TextView tv = new TextView(this);
         tv.setText(title);
         tv.setTextSize(15);
         tv.setTextColor(TEXT_MAIN);
-        tv.setTypeface(Typeface.DEFAULT_BOLD);
+        tv.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         LinearLayout.LayoutParams tvlp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        tvlp.leftMargin = dp(10);
+        tvlp.leftMargin = dp(11);
         header.addView(tv, tvlp);
 
-        card.addView(header);
-
-        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams headerLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        clp.topMargin = dp(12);
+        headerLp.bottomMargin = dp(5);
+        card.addView(header, headerLp);
         return card;
     }
 
@@ -2156,14 +2183,15 @@ public class SettingsActivity extends Activity {
     private TextView sectionTitle(String text) {
         TextView tv = new TextView(this);
         tv.setText(text);
-        tv.setTextSize(13);
+        tv.setTextSize(11);
+        tv.setLetterSpacing(0.07f);
         tv.setTextColor(TEXT_MUTED);
-        tv.setTypeface(Typeface.DEFAULT_BOLD);
-        tv.setPadding(dp(8), dp(4), dp(8), dp(4));
+        tv.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        tv.setPadding(dp(8), dp(6), dp(8), dp(5));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = dp(12);
+        lp.topMargin = dp(14);
         lp.bottomMargin = dp(4);
         tv.setLayoutParams(lp);
         return tv;
