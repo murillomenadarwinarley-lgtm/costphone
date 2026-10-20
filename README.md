@@ -64,12 +64,17 @@ El instalador hace **todo**:
    - Toca **Instalar** (si Play Protect avisa → *Entendido*).
    - **Ajustes → Accesibilidad → CostPhone → Activar** ✅
 
-Prueba final:
+Prueba de conexión (solo al instalar/actualizar o si falla el agente):
 
 ```sh
-amctl tree     # debería imprimir la pantalla actual como texto
-amctl see      # captura PNG -> /sdcard/Download/accessdroid-shot.png
+amctl doctor   # ping autenticado Termux → CostPhone, con latencia y diagnóstico
+amctl snap     # comprueba la pantalla interactiva actual
 ```
+
+El instalador prefiere un APK local validado como v1.3; si solo encuentra una
+APK heredada v1.2, pide confirmación en vez de instalarla silenciosamente.
+Así se evita creer que está activa la nueva integración cuando se instaló un
+paquete antiguo.
 
 ## Uso
 
@@ -103,7 +108,20 @@ Extra v1.1: cuando el teclado o una toolbar flotante están abiertos, sus
 botones entran al snapshot marcados `[ime]` / `[ovl]` / `[sys]` — Enter,
 borrar y "Seleccionar todo" se tocan con `tapref` como cualquier elemento.
 
-### El loop (estilo agent-browser)
+### El loop del agente: instrucción natural → script → ejecución verificada
+
+La persona describe el resultado que necesita en lenguaje natural. La skill
+`phone-control` guía al agente para preparar un script Bash adaptado a esa tarea,
+ejecutar fases que se pueden agrupar de forma segura, inspeccionar la pantalla
+cuando hay que decidir y comprobar el resultado. No es una lista de atajos
+que el usuario tenga que memorizar.
+
+Para reducir la latencia, el agente evita inspecciones duplicadas, esperas fijas
+largas y consultas de pantalla completas cuando un snapshot interactivo basta.
+Si una decisión depende de la interfaz real, el script se detiene en ese punto
+para que el agente interprete el estado; no continúa a ciegas.
+
+### El loop de control visual (estilo agent-browser)
 
 ```
 amctl snap           →  lista interactiva con refs @pN
@@ -203,9 +221,14 @@ Los íconos se regeneran del logo con `python3 gen-icons.py`
   accesibilidad** (seguridad). Hay que reactivarlo:
   **Ajustes → Accesibilidad → CostPhone → Activar**. El panel de CostPhone
   lo muestra en rojo.
-- **“⚠ SERVICIO NO RESPONDE”** al usar amctl → el servicio está apagado.
-  Reactívalo como arriba. (amctl borra y verifica el archivo antes de leer —
-  nunca te dará una pantalla vieja.)
+- **“SIN RESPUESTA” en `amctl doctor`** → el comando no recibió el ping
+  autenticado. Comprueba que Termux tiene `~/bin/amctl` de esta rama, que la
+  app instalada es la versión actual y que está activo **Ajustes → Accesibilidad
+  → CostPhone**. El instalador solía priorizar un APK v1.2 incluido en el repo;
+  ahora exige validar v1.3 o confirma antes de recurrir al APK heredado.
+- **“⚠ SERVICIO NO RESPONDE”** en `snap/tree` → usa `amctl doctor` para
+  distinguir un transporte roto de un servicio apagado. Las salidas de
+  `snap/tree/see` se limpian antes de cada petición para no confundir datos viejos.
 - **Play Protect bloquea la instalación** (“Aplicación bloqueada para proteger
   tu dispositivo”) → toca *Entendido* y reintenta; si insiste, desactiva
   temporalmente el análisis en *Play Store → Play Protect*, instala, y
