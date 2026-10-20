@@ -11,7 +11,8 @@ Esta variante ejecuta **el motor y el servidor MCP directamente en Windows**. No
 - **desktop_inspect_controls:** lee los controles visibles que Windows UI Automation expone, con nombre, Automation ID, tipo, estado, rectángulo e identidad de la ventana/proceso. Los selectores están ligados a la ventana que se inspeccionó para rechazar acciones obsoletas.
 - **desktop_click_control:** hace clic en un control seleccionado de forma exacta por los metadatos de Windows.
 - **desktop_scroll:** desplaza una página o panel en una ubicación y cantidad limitadas.
-- **desktop_set_control_text:** establece texto en controles de tipo Edit; exige permiso de entrada y bloquea campos identificados como contraseña.
+- **desktop_set_control_text:** establece texto en controles de tipo Edit; exige permiso de entrada y bloquea campos identificados como contraseña. Cuando Windows lo permite, las capturas de controles muestran también el valor accesible de los campos Edit no marcados como contraseña.
+- **desktop_set_control_checked:** activa o desactiva una casilla según su estado real, sin alternarla a ciegas.
 - **desktop_click, desktop_type_text, desktop_press_key:** control de ratón/teclado tras autorización explícita durante la instalación.
 
 La versión usa Windows UI Automation cuando la aplicación expone controles accesibles y recurre a capturas visuales/coordenadas cuando no están disponibles. No todos los programas exponen el árbol completo; juegos, escritorios remotos y superficies dibujadas a medida pueden requerir interacción visual. Tampoco intenta imitar funciones exclusivas de Android que dependen de amctl. La automatización requiere una sesión de Windows iniciada, desbloqueada y con escritorio visible; no es un servicio para ejecutar desde una sesión cerrada ni desde Windows Server sin escritorio.
