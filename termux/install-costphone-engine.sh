@@ -2,7 +2,7 @@
 # Installs the optional CostPhone Engine without changing the existing updater/config.
 set -euo pipefail
 
-BASE_URL="$COSTPHONE_ENGINE_BASE_URL"
+BASE_URL="$(printenv COSTPHONE_ENGINE_BASE_URL || true)"
 if [ -z "$BASE_URL" ]; then
   BASE_URL="https://raw.githubusercontent.com/murillomenadarwinarley-lgtm/costphone/engine/costphone-engine-v0"
 fi
