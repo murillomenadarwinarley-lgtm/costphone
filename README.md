@@ -200,6 +200,9 @@ Los íconos se regeneran del logo con `python3 gen-icons.py`
   reactívalo. **El APK no está corrupto.**
 - **MIUI/HyperOS apaga el servicio solo** → activa Termux y CostPhone en
   *Autostart* y quítales la optimización de batería.
+- **CostPhone se desconecta al pasar a segundo plano** → actualiza a v1.6.7, revisa que Accesibilidad siga activa y que la notificación persistente esté presente. Excluye CostPhone y Termux del ahorro de batería; en MIUI/HyperOS activa *Inicio automático*.
+- **Lag / comandos tardíos** → ejecuta `amctl logs` y revisa `PERF command=` (espera/tiempo de comando) y `KEEPALIVE_START_REJECTED` (Android rechazó el servicio de primer plano). El árbol de accesibilidad tiene límite de 1200 líneas para evitar recorridos desmesurados.
+- **Forzar detención** desde Ajustes detiene los servicios por diseño de Android; es necesario abrir CostPhone otra vez.
 
 ## Seguridad
 
