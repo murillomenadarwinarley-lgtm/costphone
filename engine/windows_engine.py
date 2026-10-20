@@ -214,14 +214,43 @@ class WindowsDesktopAdapter:
             visible = bool(control.is_visible())
         except Exception:
             visible = False
+        name = str(getattr(info, "name", "") or "")[:300]
+        automation_id = str(getattr(info, "automation_id", "") or "")[:300]
+        control_type = str(getattr(info, "control_type", "") or "")[:100]
+        class_name = str(getattr(info, "class_name", "") or "")[:160]
+        try:
+            is_password = bool(getattr(info, "is_password", False))
+        except Exception:
+            is_password = False
+        value: str | None = None
+        value_available = False
+        if control_type.casefold() == "edit" and not is_password:
+            getter = getattr(control, "get_value", None)
+            if callable(getter):
+                try:
+                    raw_value = getter()
+                    if raw_value is not None:
+                        value = str(raw_value)[:MAX_TYPED_TEXT]
+                        value_available = True
+                except Exception:
+                    pass
+        try:
+            raw_toggle_state = control.get_toggle_state()
+            toggle_state = {0: "off", 1: "on", 2: "indeterminate"}.get(int(raw_toggle_state))
+        except Exception:
+            toggle_state = None
         return {
-            "name": str(getattr(info, "name", "") or "")[:300],
-            "automation_id": str(getattr(info, "automation_id", "") or "")[:300],
-            "control_type": str(getattr(info, "control_type", "") or "")[:100],
-            "class_name": str(getattr(info, "class_name", "") or "")[:160],
+            "name": name,
+            "automation_id": automation_id,
+            "control_type": control_type,
+            "class_name": class_name,
             "enabled": enabled,
             "visible": visible,
             "bounds": bounds,
+            "value": value,
+            "value_available": value_available,
+            "password_field": is_password,
+            "toggle_state": toggle_state,
         }
 
     def _active_ui_controls(self) -> tuple[dict[str, Any], list[Any]]:
@@ -338,6 +367,30 @@ class WindowsDesktopAdapter:
         except Exception as exc:
             raise EngineError("control_click_failed", "No se pudo hacer clic en el control. Inspecciona la ventana de nuevo; no se repetirá la acción.", {"control": details, "reason": str(exc)[:300]}) from exc
         return {"clicked": True, "control": details}
+
+    def set_control_checked(self, selector: dict[str, Any], checked: bool) -> dict[str, Any]:
+        self._require_windows()
+        if type(checked) is not bool:
+            raise EngineError("invalid_checked", "checked debe ser un booleano.")
+        control, details = self._resolve_control(selector)
+        if not details["enabled"]:
+            raise EngineError("control_disabled", "Windows indica que el control está deshabilitado.", {"control": details})
+        try:
+            current = int(control.get_toggle_state())
+        except Exception as exc:
+            raise EngineError("not_toggle_control", "El elemento no expone un estado de casilla/control alternable compatible.", {"control": details, "reason": str(exc)[:200]}) from exc
+        if current not in {0, 1}:
+            raise EngineError("toggle_indeterminate", "El control está en estado indeterminado; no cambiaré su estado automáticamente.", {"control": details, "toggle_state": current})
+        target = 1 if checked else 0
+        if current != target:
+            try:
+                control.toggle()
+                actual = int(control.get_toggle_state())
+            except Exception as exc:
+                raise EngineError("toggle_failed", "No se pudo cambiar el estado del control. Inspecciona de nuevo; no se repetirá automáticamente.", {"control": details, "reason": str(exc)[:300]}) from exc
+            if actual != target:
+                raise EngineError("toggle_unverified", "Windows no confirmó el estado solicitado. No se repetirá automáticamente.", {"control": details, "expected_checked": checked, "actual_state": actual})
+        return {"checked": checked, "changed": current != target, "control": details}
 
     def set_control_text(self, selector: dict[str, Any], text: str) -> dict[str, Any]:
         self._require_windows()
@@ -463,6 +516,12 @@ class WindowsDesktopEngine:
     def set_control_text(self, selector: Any, text: Any) -> dict[str, Any]:
         self._require_input()
         return {"ok": True, **self.adapter.set_control_text(validate_control_selector(selector), validate_text(text))}
+
+    def set_control_checked(self, selector: Any, checked: Any) -> dict[str, Any]:
+        self._require_input()
+        if type(checked) is not bool:
+            raise EngineError("invalid_checked", "checked debe ser un booleano.")
+        return {"ok": True, **self.adapter.set_control_checked(validate_control_selector(selector), checked)}
 
     def launch_app(self, executable: Any) -> dict[str, Any]:
         return {"ok": True, **self.adapter.launch_app(validate_app_name(executable))}
