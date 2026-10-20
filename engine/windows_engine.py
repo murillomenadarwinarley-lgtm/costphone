@@ -83,6 +83,12 @@ def validate_coordinate(value: Any, label: str) -> int:
     return value
 
 
+def validate_scroll(value: Any) -> int:
+    if type(value) is not int or value == 0 or value < -20 or value > 20:
+        raise EngineError("invalid_scroll", "clicks debe ser un entero entre -20 y 20, distinto de cero.")
+    return value
+
+
 def validate_control_selector(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise EngineError("invalid_selector", "selector debe ser un objeto con name y/o automation_id.")
@@ -393,6 +399,11 @@ class WindowsDesktopAdapter:
         self._pyautogui().click(x=x, y=y, clicks=1, button="left")
         return {"x": x, "y": y, "clicked": True}
 
+    def scroll(self, x: int, y: int, clicks: int) -> dict[str, Any]:
+        self._require_windows()
+        self._pyautogui().scroll(clicks, x=x, y=y)
+        return {"x": x, "y": y, "clicks": clicks, "scrolled": True}
+
     def type_text(self, text: str) -> dict[str, Any]:
         self._require_windows()
         pyautogui = self._pyautogui()
@@ -477,6 +488,19 @@ class WindowsDesktopEngine:
         if x >= width or y >= height:
             raise EngineError("invalid_coordinates", "Las coordenadas quedan fuera de la pantalla activa.", {"screen_width": width, "screen_height": height})
         return {"ok": True, **self.adapter.click(x, y)}
+
+    def scroll(self, x: Any, y: Any, clicks: Any) -> dict[str, Any]:
+        self._require_input()
+        x = validate_coordinate(x, "x")
+        y = validate_coordinate(y, "y")
+        clicks = validate_scroll(clicks)
+        window = self.adapter.inspect()
+        width, height = window.get("screen_width"), window.get("screen_height")
+        if not isinstance(width, int) or not isinstance(height, int) or width <= 0 or height <= 0:
+            raise EngineError("screen_unknown", "No pude verificar la resolución de la pantalla.")
+        if x >= width or y >= height:
+            raise EngineError("invalid_coordinates", "El punto de scroll queda fuera de la pantalla activa.", {"screen_width": width, "screen_height": height})
+        return {"ok": True, **self.adapter.scroll(x, y, clicks)}
 
     def type_text(self, text: Any) -> dict[str, Any]:
         self._require_input()
