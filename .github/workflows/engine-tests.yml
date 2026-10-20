@@ -9,6 +9,9 @@ on:
       - "skill/costphone-engine/**"
       - "termux/install-costphone-engine.sh"
       - ".github/workflows/engine-tests.yml"
+      - "pc/windows/**"
+      - "docs/pc-windows.md"
+      - "README.md"
   pull_request:
     branches:
       - mi-cambio
@@ -38,6 +41,18 @@ jobs:
         run: |
           python -m py_compile engine/costphone_engine.py engine/mcp_server.py engine/test_engine.py
           bash -n termux/install-costphone-engine.sh
+
+      - name: Validate Windows setup script syntax (PowerShell)
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("pc/windows/setup-costphone.ps1", [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_ }
+            exit 1
+          }
+          Write-Host "PowerShell syntax OK"
 
       - name: Offline unit tests
         run: python -m unittest discover -s engine -p 'test_*.py' -v

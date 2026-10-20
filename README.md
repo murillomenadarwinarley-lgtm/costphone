@@ -171,6 +171,13 @@ la pantalla 0) y la bitácora de cómo se descubrió esto:
 snapshot/tap, cómo leer el árbol, troubleshooting, etc. `install.sh` la deja
 en el lugar correcto y la registra en `AGENTS.md` automáticamente.
 
+
+## Usar CostPhone desde un PC Windows
+
+Puedes ejecutar OpenCode en Windows y conectarlo por SSH al motor que permanece en el teléfono en Termux, sin pagar por un servicio de puente y sin cambiar la firma del APK. Sigue la [guía de PC Windows](docs/pc-windows.md) y usa el instalador PowerShell pc/windows/setup-costphone.ps1.
+
+El motor y amctl siguen ejecutándose en Android; Windows aloja OpenCode y se conecta por SSH a través de la red local.
+
 ## Compilar el APK tú mismo
 
 ```sh
