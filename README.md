@@ -198,19 +198,27 @@ la pantalla 0) y la bitácora de cómo se descubrió esto:
 snapshot/tap, cómo leer el árbol, troubleshooting, etc. `install.sh` la deja
 en el lugar correcto y la registra en `AGENTS.md` automáticamente.
 
+## Firma original y actualizaciones (importante)
+
+Android necesita que el APK nuevo conserve el certificado de firma de la aplicación instalada. El workflow anterior publicaba una APK debug creada en un runner efímero, así que no garantizaba la firma original.
+
+**No desinstales la versión instalada.** Ahora la compilación de CI solo publica el artefacto `costphone-update-apk` cuando se configura el keystore original y el certificado SHA-256 del release coincide con el de `apk/CostPhone-v1.2.apk`. Si la clave falta o la firma no coincide, no se publica una APK de actualización.
+
+Consulta **[docs/firma-original.md](docs/firma-original.md)** para recuperar el keystore correcto y configurar los secretos privados de GitHub Actions. No subas el keystore ni sus contraseñas al repositorio ni a una conversación. También hay que confirmar que el certificado de la app instalada coincide con el APK heredado de referencia.
+
 ## Compilar el APK tú mismo
 
 ```sh
 pkg install gradle
 cd app
-bash build.sh          # -> build/CostPhone.apk
+bash build.sh
 ```
 
-Necesitas JDK 17, Gradle y Android SDK Platform 36 + Build Tools 36.0.0
-en `~/android-sdk` (o define `ANDROID_HOME`). Gradle descarga la API oficial
-de Shizuku y sus dependencias desde Maven Central. El APK de depuración queda
-en `app/build/CostPhone.apk`. La firma de depuración es local; no es una
-firma de publicación.
+Necesitas JDK 17, Gradle y Android SDK Platform 36 + Build Tools 36.0.0 en `~/android-sdk` (o define `ANDROID_HOME`).
+
+- Con el keystore original configurado en `COSTPHONE_KEYSTORE_PATH`, `COSTPHONE_KEYSTORE_PASSWORD`, `COSTPHONE_KEY_ALIAS` y `COSTPHONE_KEY_PASSWORD`, el script verifica la firma y genera `app/build/CostPhone.apk`.
+- Sin esa clave, solo genera `app/build/CostPhone-debug.apk` para pruebas. **No instales esa APK encima de CostPhone ni la distribuyas como actualización.**
+- Las credenciales locales no se guardan en el código. Los builds de pull request validan el código, pero no reciben las claves de firma ni publican el APK release.
 
 Los íconos se regeneran del logo con `python3 gen-icons.py`
 (fuente: `app/assets/costphone-logo.png`).
