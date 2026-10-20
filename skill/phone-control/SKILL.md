@@ -7,6 +7,17 @@ description: "Control del teléfono Android desde Termux con CostPhone/amctl. En
 
 **Objetivo:** terminar la tarea, no narrar ni diagnosticar. Usa el mínimo de llamadas al terminal. No generes capturas ni vuelques árboles por rutina.
 
+## Preparación rápida (solo una vez)
+
+El propietario del teléfono debe iniciar Shizuku y conceder a CostPhone el permiso si aún no lo hizo. Después, en Termux, ejecutar una vez:
+
+```bash
+amctl session-start
+amctl status
+```
+
+Confirma que `sesión rish` aparezca activa. En el registro anterior estaba inactiva y el transporte era `am` clásico: eso añade sobrecarga por comando. No repitas estos pasos en cada tarea ni intentes iniciarlos en segundo plano desde el agente; si el permiso falta, pide al propietario que lo autorice en la app Shizuku/CostPhone.
+
 ## Flujo
 1. Abre la app una sola vez con `amctl launch <paquete>` si no está abierta.
 2. Ve directo a un selector conocido (`clickid`, `click`) y agrupa pasos dependientes con `amctl batch`.
@@ -38,6 +49,8 @@ En `batch`, usa `waittext "texto con espacios" 8` con comillas normales. CostPho
 
 ## Regla para no perder tiempo
 No uses Python, timestamps, `amctl status`, `doctor`, `logs`, `tree` o PNG para una tarea normal. No abras Termux al final solo para reportar tiempo. Si hay que medir, crea la marca de tiempo antes del flujo y léela una vez al final con una ruta absoluta y válida.
+
+El tiempo de razonamiento del modelo no se arregla con permisos del teléfono. Para tareas rutinarias, elige desde `/models` un modelo rápido que soporte bien herramientas y mantén un plan corto: una lectura cuando sea necesaria, un lote de acciones y una confirmación final. No narres cada paso ni generes informes largos.
 
 ## Recuperación limitada
 - Si un comando falla por primera vez, prueba una única alternativa basada en el estado observado.
