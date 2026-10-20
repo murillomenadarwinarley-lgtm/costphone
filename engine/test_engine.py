@@ -65,6 +65,9 @@ class FakeAdapter:
 
 
 class EngineValidationTests(unittest.TestCase):
+    def test_default_amctl_timeout_is_30_seconds(self):
+        self.assertEqual(AmctlAdapter().timeout_s, 30.0)
+
     def test_accepts_basic_staged_plan(self):
         validated = validate_plan(simple_plan())
         self.assertEqual(validated["action_count"], 1)
