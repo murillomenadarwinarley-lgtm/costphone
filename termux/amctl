@@ -849,12 +849,28 @@ cmd_find() {
 }
 
 wait_foreground_package() {
-    local expected="${1:-}" actual="" attempt
+    local expected="${1:-}" actual="" out="" attempt
     [[ -n "$expected" ]] || return 2
     # 'am start' solo confirma que Android aceptó el Intent. Esperar al foco real
-    # evita que el agente haga waittext/snap sobre el launcher y pierda 8-10 s.
+    # evita seguir leyendo el launcher. Con rish, consultar dumpsys no necesita
+    # el servicio de accesibilidad; sin rish se hace una sola consulta inicial
+    # para detectar rápido un servicio desconectado, evitando 20 esperas de 3s.
     for ((attempt=0; attempt<20; attempt++)); do
-        actual="$(fg_pkg 2>/dev/null)" || actual=""
+        if session_alive && [[ "$DISPLAY_ID" == "0" ]]; then
+            session_raw "dumpsys window 2>/dev/null | grep -m1 -E 'mCurrentFocus|mFocusedApp' | grep -m1 -oE '[a-zA-Z0-9_]+[.][a-zA-Z0-9_.]+/[a-zA-Z0-9_.]+'" || out=""
+            out="$SESSION_OUT"
+            if [[ "$out" =~ ^([A-Za-z0-9_]+(\.[A-Za-z0-9_.]+)+)/ ]]; then
+                actual="${BASH_REMATCH[1]}"
+            else
+                actual=""
+            fi
+        else
+            actual="$(fg_pkg 2>/dev/null)" || actual=""
+            if [[ -z "$actual" ]]; then
+                echo "amctl launch: no pude comprobar el primer plano (servicio de accesibilidad sin respuesta)." >&2
+                return 1
+            fi
+        fi
         [[ "$actual" == "$expected" ]] && return 0
         sleep 0.1
     done
