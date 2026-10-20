@@ -6,7 +6,7 @@ CostPhone Engine is an **additive, opt-in orchestration layer** above the existi
 
 - Local CLI: inspect, launch-and-verify, validate a JSON plan, execute a staged plan, or start MCP.
 - MCP stdio server for agents such as OpenCode: phone_inspect, phone_launch, phone_validate_plan, phone_run_plan.
-- Each plan stage checks the foreground package and visible text before it acts, then checks the expected screen afterwards.
+- Each plan stage checks the foreground package and visible text before it acts, then checks the expected screen afterwards. If a stage has multiple actions, every action after the first must include its own requires text so the engine re-reads the screen before continuing.
 - Sensitive button actions (for example Send, Delete, Pay, Publish, Checkout and Enter) are blocked by default. There is no automatic action retry.
 - No Python packages, APK rebuild, or modification of existing amctl commands is required.
 
@@ -104,7 +104,7 @@ A plan can be validated with phone_validate_plan before execution. Use phone_run
 
 - The engine is not a language model. The calling agent translates the user request into a plan; the engine executes and verifies that plan.
 - Package assertions alone are not enough. Add visible text that distinguishes the intended screen, recipient, file, or form.
-- For sensitive controls, requires must include destination/context and relevant content. The engine takes a fresh snapshot immediately before the action.
+- For sensitive controls, requires must include destination/context and relevant content. The engine takes a fresh snapshot immediately before the action. Use not_contains in expect when a visible distractor would make the destination ambiguous.
 - A failed action is never retried automatically, because an action can succeed even if its confirmation is lost.
 - Each execution stage returns an error if the preconditions or postconditions do not match. Earlier actions in a multi-stage plan may already have happened; inspect the returned stage and do not blindly rerun the whole plan.
 - Keep Android's Accessibility and Shizuku authorizations intact. The engine does not bypass permissions or disable the existing guard.
