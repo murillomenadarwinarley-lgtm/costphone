@@ -200,8 +200,8 @@ Los íconos se regeneran del logo con `python3 gen-icons.py`
   reactívalo. **El APK no está corrupto.**
 - **MIUI/HyperOS apaga el servicio solo** → activa Termux y CostPhone en
   *Autostart* y quítales la optimización de batería.
-- **CostPhone se desconecta al pasar a segundo plano** → actualiza a v1.6.7, revisa que Accesibilidad siga activa y que la notificación persistente esté presente. Excluye CostPhone y Termux del ahorro de batería; en MIUI/HyperOS activa *Inicio automático*.
-- **Lag / comandos tardíos** → ejecuta `amctl logs` y revisa `PERF command=` (espera/tiempo de comando) y `KEEPALIVE_START_REJECTED` (Android rechazó el servicio de primer plano). El árbol de accesibilidad tiene límite de 1200 líneas para evitar recorridos desmesurados.
+- **CostPhone se desconecta al pasar a segundo plano** → actualiza a v1.6.8, revisa que Accesibilidad siga activa y que la notificación persistente esté presente. Excluye CostPhone y Termux del ahorro de batería; en MIUI/HyperOS activa *Inicio automático*.
+- **Lag / comandos tardíos** → v1.6.8 envía toques y teclas por la API local de Accesibilidad (sin esperar un IPC de Shizuku), separa capturas/árboles de la cola interactiva, descarta órdenes interactivas obsoletas y limita los nodos visitados. Revisa `PERF command=` y `QUEUE busy` con `amctl logs`.
 - **Forzar detención** desde Ajustes detiene los servicios por diseño de Android; es necesario abrir CostPhone otra vez.
 
 ## Seguridad
@@ -228,3 +228,10 @@ Los íconos se regeneran del logo con `python3 gen-icons.py`
   pantalla virtual dirigida (`amctl -d N`), y fixes varios (screenshot en
   Android 14/16, servicio tras updates).
 - Licencia: **MIT** — ver [LICENSE](LICENSE).
+
+
+## Rendimiento y accesibilidad (v1.6.8)
+
+- Los toques y teclas usan la API nativa de Accesibilidad en el teléfono; Shizuku se conserva para operaciones avanzadas, pero un IPC lento no retiene la cola de gestos.
+- Capturas, volcados del árbol y diagnósticos se aíslan de los comandos interactivos. Las búsquedas y el árbol tienen límites de nodos para evitar explorar jerarquías enormes indefinidamente.
+- La aplicación no escribe en `ENABLED_ACCESSIBILITY_SERVICES` ni puede reactivar el permiso por su cuenta. Si Android lo deshabilita durante una instalación/actualización, vuelve a activarlo manualmente en Ajustes → Accesibilidad → CostPhone; no borres los datos de la app.
