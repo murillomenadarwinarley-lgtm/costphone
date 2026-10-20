@@ -69,20 +69,29 @@ fi
 step "5/6  Registrando la skill en AGENTS.md..."
 if [ -d "$HOME/.config/opencode" ]; then
     touch "$AGENTS"
-    if ! grep -q 'phone-control' "$AGENTS" 2>/dev/null; then
-        cat >> "$AGENTS" <<'EOF'
+    python3 - "$AGENTS" <<'PY'
+from pathlib import Path
+import sys
 
-<!-- phone-control -->
-Phone tasks (control the user's Android apps): use `amctl` + skill `phone-control`.
-Loop: `amctl launch <pkg>` → `amctl snap` (refs @pN) → `amctl tapref @pN` / `type` / `click` → re-snap.
-Read screen as text: `amctl tree` (full) or `amctl snap -a`. Screenshot: `amctl see`.
+path = Path(sys.argv[1])
+text = path.read_text(encoding="utf-8") if path.exists() else ""
+start = "<!-- phone-control -->"
+end = "<!-- end phone-control -->"
+block = """<!-- phone-control -->
+Phone tasks (control the user's Android apps): accept natural-language goals and use the phone-control skill. For multi-step work, create and run a task-specific adaptive Bash script; do not make the user type amctl commands.
+Use amctl doctor only after install/update or when the Termux-to-CostPhone transport fails. Then use amctl snap for the current interactive screen, amctl tapref with fresh refs, and re-snapshot after screen transitions. Use tree/see only when snap is insufficient.
+Verify the requested outcome rather than reporting success because a command returned.
 Guide: ~/.config/opencode/skills/android/phone-control/SKILL.md
-<!-- end phone-control -->
-EOF
-        echo "     bloque añadido a $AGENTS"
-    else
-        echo "     ya estaba registrado en $AGENTS"
-    fi
+<!-- end phone-control -->"""
+if start in text and end in text:
+    before = text.split(start, 1)[0]
+    after = text.split(end, 1)[1]
+    text = before + block + after
+else:
+    text = text.rstrip() + "\n\n" + block + "\n"
+path.write_text(text, encoding="utf-8")
+PY
+    echo "     bloque de agente actualizado en $AGENTS"
 fi
 
 # --- 6. APK ----------------------------------------------------------------
