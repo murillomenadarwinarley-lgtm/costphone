@@ -393,6 +393,48 @@ class MCPProtocolTests(unittest.TestCase):
         names = {item["name"] for item in tools["result"]["tools"]}
         self.assertEqual(names, {"phone_inspect", "phone_launch", "phone_validate_plan", "phone_run_plan", "phone_resume_plan", "phone_get_run"})
 
+    def test_phone_get_run_is_read_only_and_returns_progress(self):
+        with tempfile.TemporaryDirectory() as state_dir:
+            adapter = FakeAdapter([
+                snap("com.example.app", "Home", "Settings"),
+                snap("com.example.app", "Settings", "Saved"),
+            ])
+            engine = CostPhoneEngine(adapter=adapter, journal_dir=state_dir)
+            finished = engine.run_plan(simple_plan())
+            inspect_calls = adapter.inspect_calls
+            reply = dispatch(
+                "tools/call",
+                {"name": "phone_get_run", "arguments": {"run_id": finished["run_id"]}},
+                engine,
+            )
+            payload = json.loads(reply["result"]["content"][0]["text"])
+            self.assertTrue(payload["ok"])
+            self.assertEqual(payload["run"]["status"], "completed")
+            self.assertEqual(payload["run"]["next_stage"], 2)
+            self.assertEqual(adapter.inspect_calls, inspect_calls)
+            self.assertEqual(len(adapter.actions), 1)
+
+    def test_phone_resume_plan_tool_does_not_repeat_completed_run(self):
+        with tempfile.TemporaryDirectory() as state_dir:
+            adapter = FakeAdapter([
+                snap("com.example.app", "Home", "Settings"),
+                snap("com.example.app", "Settings", "Saved"),
+            ])
+            engine = CostPhoneEngine(adapter=adapter, journal_dir=state_dir)
+            result = engine.run_plan(simple_plan())
+            reply = dispatch(
+                "tools/call",
+                {
+                    "name": "phone_resume_plan",
+                    "arguments": {"run_id": result["run_id"], "plan": simple_plan()},
+                },
+                engine,
+            )
+            payload = json.loads(reply["result"]["content"][0]["text"])
+            self.assertTrue(payload["ok"])
+            self.assertTrue(payload["already_completed"])
+            self.assertEqual(len(adapter.actions), 1)
+
     def test_phone_run_plan_accepts_dry_run_without_phone_io(self):
         adapter = FakeAdapter([])
         engine = CostPhoneEngine(adapter=adapter)
