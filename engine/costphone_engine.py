@@ -861,7 +861,6 @@ class CostPhoneEngine:
                 resume_current = False
             except EngineError as exc:
                 current_state = record.get("current_stage") or {}
-                uncertain_action = current_state.get("phase") == "action_in_progress"
                 # Leave uncertain actions paused for one explicit reconciliation attempt.
                 # resume_plan will inspect the phone once and promote unresolved cases to needs_attention.
                 record["status"] = "paused"
@@ -873,9 +872,29 @@ class CostPhoneEngine:
                     "completed_stages": len(record.get("completed_stages", [])),
                     "next_stage": record.get("next_stage", 1),
                     "failed_stage": index + 1,
+                    "action_may_have_taken_effect": current_state.get("phase") == "action_in_progress",
                     "resume_available": True,
                 })
                 raise
+            except Exception as exc:
+                current_state = record.get("current_stage") or {}
+                # Preserve a resumable run_id even for unexpected adapter/runtime errors.
+                record["status"] = "paused"
+                record["last_error"] = {"code": "internal_error", "message": "Fallo inesperado durante la ejecución."}
+                self.journal.save(record)
+                raise EngineError(
+                    "execution_interrupted",
+                    "La ejecución se interrumpió por un error interno. No repetiré acciones automáticamente; inspecciona el estado antes de continuar.",
+                    {
+                        "run_id": record["run_id"],
+                        "run_status": record["status"],
+                        "completed_stages": len(record.get("completed_stages", [])),
+                        "next_stage": record.get("next_stage", 1),
+                        "failed_stage": index + 1,
+                        "action_may_have_taken_effect": current_state.get("phase") == "action_in_progress",
+                        "resume_available": True,
+                    },
+                ) from exc
 
         total_ms = int((time.monotonic() - started) * 1000)
         record["status"] = "completed"
