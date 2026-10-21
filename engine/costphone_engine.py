@@ -8,6 +8,7 @@ for the existing CostPhone app/CLI.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -15,11 +16,14 @@ import shutil
 import subprocess
 import sys
 import time
+import uuid
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-VERSION = "0.1.2"
+VERSION = "0.2.0"
 PACKAGE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+$")
 HEADER_RE = re.compile(r"^Pantalla(?:\s+—\s+display\s+\d+)?:\s*([^\s—]+)\s+—", re.MULTILINE)
 RISK_RE = re.compile(
@@ -365,12 +369,110 @@ def _check_snapshot(snapshot: Snapshot, assertion: dict[str, Any], stage: str) -
         )
 
 
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _plan_digest(validated_plan: dict[str, Any]) -> str:
+    canonical = json.dumps(validated_plan, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+class RunJournal:
+    """Private, atomic task journal. It stores progress only, never the plan or screen text."""
+
+    def __init__(self, directory: str | os.PathLike[str] | None = None):
+        configured = directory or os.environ.get("COSTPHONE_RUNS_DIR")
+        self.directory = (
+            Path(configured).expanduser()
+            if configured
+            else Path.home() / ".local" / "state" / "costphone-engine" / "runs"
+        )
+
+    @staticmethod
+    def validate_run_id(run_id: Any) -> str:
+        if not isinstance(run_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", run_id):
+            raise EngineError("invalid_run_id", "run_id debe contener de 1 a 64 letras, números, guiones o guiones bajos.")
+        return run_id
+
+    def _path(self, run_id: str) -> Path:
+        return self.directory / (self.validate_run_id(run_id) + ".json")
+
+    def save(self, record: dict[str, Any]) -> None:
+        path = self._path(record.get("run_id"))
+        record["updated_at"] = _utc_now()
+        try:
+            self.directory.mkdir(parents=True, exist_ok=True)
+            try:
+                os.chmod(self.directory, 0o700)
+            except OSError:
+                pass
+            temp = path.with_name(path.name + "." + uuid.uuid4().hex + ".tmp")
+            try:
+                with temp.open("x", encoding="utf-8") as fh:
+                    json.dump(record, fh, ensure_ascii=False, separators=(",", ":"))
+                    fh.write("\n")
+                try:
+                    os.chmod(temp, 0o600)
+                except OSError:
+                    pass
+                os.replace(temp, path)
+            finally:
+                try:
+                    temp.unlink()
+                except FileNotFoundError:
+                    pass
+        except OSError as exc:
+            raise EngineError(
+                "journal_write_failed",
+                "No pude guardar el punto de control local. La ejecución no continuará sin un registro fiable.",
+                {"run_id": record.get("run_id"), "reason": str(exc)},
+            ) from exc
+
+    def create(self, validated_plan: dict[str, Any]) -> dict[str, Any]:
+        run_id = "cp_" + uuid.uuid4().hex
+        record: dict[str, Any] = {
+            "schema_version": 1,
+            "run_id": run_id,
+            "name": validated_plan["name"],
+            "plan_sha256": _plan_digest(validated_plan),
+            "status": "running",
+            "created_at": _utc_now(),
+            "updated_at": _utc_now(),
+            "next_stage": 1,
+            "completed_stages": [],
+            "current_stage": None,
+            "last_error": None,
+        }
+        self.save(record)
+        return record
+
+    def load(self, run_id: str) -> dict[str, Any]:
+        path = self._path(run_id)
+        try:
+            with path.open("r", encoding="utf-8") as fh:
+                record = json.load(fh)
+        except FileNotFoundError as exc:
+            raise EngineError("run_not_found", "No existe un registro local para ese run_id.", {"run_id": run_id}) from exc
+        except (OSError, json.JSONDecodeError) as exc:
+            raise EngineError("journal_corrupt", "No pude leer el registro local de la tarea.", {"run_id": run_id}) from exc
+        if not isinstance(record, dict) or record.get("schema_version") != 1 or record.get("run_id") != run_id:
+            raise EngineError("journal_corrupt", "El registro local no tiene un formato válido.", {"run_id": run_id})
+        return record
+
+
 class CostPhoneEngine:
-    def __init__(self, adapter: Any | None = None, allow_external_effects: bool | None = None):
+    def __init__(
+        self,
+        adapter: Any | None = None,
+        allow_external_effects: bool | None = None,
+        journal_dir: str | os.PathLike[str] | None = None,
+    ):
         self.adapter = adapter or AmctlAdapter()
         if allow_external_effects is None:
             allow_external_effects = os.environ.get("COSTPHONE_ALLOW_EXTERNAL_EFFECTS") == "1"
         self.allow_external_effects = bool(allow_external_effects)
+        self.journal = RunJournal(journal_dir)
 
     def inspect(self) -> dict[str, Any]:
         snap = self.adapter.inspect()
@@ -397,11 +499,45 @@ class CostPhoneEngine:
             "dry_run": True,
         }
 
+    @staticmethod
+    def _stage_summary(index: int, package: str, actions_completed: int, reconciled: bool = False) -> dict[str, Any]:
+        return {
+            "stage": index + 1,
+            "package": package,
+            "actions_completed": actions_completed,
+            "postconditions_matched": True,
+            "reconciled_after_interruption": reconciled,
+        }
+
+    def _mark_attention(
+        self,
+        record: dict[str, Any],
+        code: str,
+        message: str,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        record["status"] = "needs_attention"
+        record["last_error"] = {"code": code, "message": message}
+        self.journal.save(record)
+        extra = {
+            "run_id": record["run_id"],
+            "run_status": record["status"],
+            "completed_stages": len(record.get("completed_stages", [])),
+            "next_stage": record.get("next_stage", 1),
+            "resume_available": False,
+        }
+        extra.update(details or {})
+        raise EngineError(code, message, extra)
+
+    def get_run(self, run_id: str) -> dict[str, Any]:
+        record = self.journal.load(run_id)
+        # Journal schema intentionally excludes task text, action values and screen snapshots.
+        return {"ok": True, "run": record}
+
     def run_plan(self, plan: Any, dry_run: bool = False) -> dict[str, Any]:
         if not isinstance(dry_run, bool):
             raise EngineError("invalid_argument", "dry_run debe ser un booleano.")
 
-        # Validate the entire plan before doing any device I/O.
         valid = validate_plan(plan, self.allow_external_effects)
         if dry_run:
             return {
@@ -413,77 +549,333 @@ class CostPhoneEngine:
                 "actions_would_run": valid["action_count"],
                 "actions_executed": 0,
                 "plan": valid,
-                "note": "Simulación únicamente: no se inspeccionó ni modificó el teléfono.",
+                "note": "Simulación únicamente: no se inspeccionó ni modificó el teléfono ni se creó un registro de ejecución.",
             }
 
+        record = self.journal.create(valid)
+        return self._execute_validated_plan(valid, record, start_index=0, action_offset=0, resume_current=False)
+
+    def resume_plan(self, plan: Any, run_id: str) -> dict[str, Any]:
+        """Resume only from journaled, freshly revalidated states; never blindly replays an uncertain action."""
+        valid = validate_plan(plan, self.allow_external_effects)
+        record = self.journal.load(run_id)
+        if record.get("plan_sha256") != _plan_digest(valid):
+            raise EngineError(
+                "run_plan_mismatch",
+                "El plan no coincide con el que creó este run_id. No ejecutaré un plan distinto sobre el registro.",
+                {"run_id": run_id, "resume_available": False},
+            )
+        if record.get("status") == "completed":
+            return {
+                "ok": True,
+                "run_id": run_id,
+                "resumed": False,
+                "already_completed": True,
+                "steps_completed": len(record.get("completed_stages", [])),
+                "results": record.get("completed_stages", []),
+                "note": "La tarea ya figura completada; no se repitió ninguna acción.",
+            }
+
+        current_stage = record.get("current_stage")
+        start_index = max(0, int(record.get("next_stage", 1)) - 1)
+        action_offset = 0
+        resume_current = False
+
+        if current_stage is not None:
+            index = int(current_stage.get("stage", 0)) - 1
+            if index < 0 or index >= len(valid["steps"]):
+                self._mark_attention(record, "journal_corrupt", "El punto de control indica una etapa fuera del plan.")
+            step = valid["steps"][index]
+            phase = current_stage.get("phase")
+            actions_completed = int(current_stage.get("actions_completed", 0))
+            total_actions = len(step["actions"])
+
+            # If the process died while an action was in flight, inspect before deciding anything.
+            if phase == "action_in_progress":
+                snapshot = self._resume_snapshot(record, "No pude inspeccionar la tarea de forma segura al reanudar.")
+                try:
+                    _check_snapshot(snapshot, step["after"], "reanudar: resultado visible de la etapa")
+                except EngineError:
+                    self._mark_attention(
+                        record,
+                        "resume_ambiguous",
+                        "Una acción pudo haber surtido efecto, pero la condición final no coincide. No repetiré la acción.",
+                        {"run_id": run_id, "failed_stage": index + 1, "action_may_have_taken_effect": True},
+                    )
+                if current_stage.get("action_external_effect"):
+                    self._mark_attention(
+                        record,
+                        "external_outcome_uncertain",
+                        "La pantalla coincide con la condición final, pero una acción externa pudo ejecutarse antes de la interrupción. Revisa el resultado antes de continuar.",
+                        {
+                            "run_id": run_id,
+                            "failed_stage": index + 1,
+                            "visible_postconditions_matched": True,
+                            "action_may_have_taken_effect": True,
+                        },
+                    )
+                if int(current_stage.get("action_index", -1)) != total_actions - 1:
+                    self._mark_attention(
+                        record,
+                        "resume_ambiguous",
+                        "La pantalla parece coincidir con el final, pero quedaban acciones en esta etapa. No omitiré pasos sin evidencia.",
+                        {"run_id": run_id, "failed_stage": index + 1},
+                    )
+                record["completed_stages"].append(
+                    self._stage_summary(index, snapshot.package, total_actions, reconciled=True)
+                )
+                record["next_stage"] = index + 2
+                record["current_stage"] = None
+                record["status"] = "running"
+                record["last_error"] = None
+                self.journal.save(record)
+                start_index = index + 1
+            elif phase == "verifying" or actions_completed == total_actions:
+                snapshot = self._resume_snapshot(record, "No pude verificar el resultado de la etapa al reanudar.")
+                try:
+                    _check_snapshot(snapshot, step["after"], "reanudar: resultado visible de la etapa")
+                except EngineError:
+                    self._mark_attention(
+                        record,
+                        "resume_result_mismatch",
+                        "Las acciones registradas terminaron, pero la condición final no coincide. No repetiré la etapa automáticamente.",
+                        {"run_id": run_id, "failed_stage": index + 1},
+                    )
+                record["completed_stages"].append(
+                    self._stage_summary(index, snapshot.package, total_actions, reconciled=True)
+                )
+                record["next_stage"] = index + 2
+                record["current_stage"] = None
+                record["status"] = "running"
+                record["last_error"] = None
+                self.journal.save(record)
+                start_index = index + 1
+            elif actions_completed == 0:
+                snapshot = self._resume_snapshot(record, "No pude revalidar el estado previo a las acciones.")
+                try:
+                    _check_snapshot(snapshot, step["expect"], "reanudar: estado previo")
+                except EngineError:
+                    self._mark_attention(
+                        record,
+                        "resume_context_mismatch",
+                        "La pantalla actual no coincide con el estado esperado. Necesita un nuevo plan basado en el estado real.",
+                        {"run_id": run_id, "failed_stage": index + 1},
+                    )
+                current_stage["phase"] = "preparing_resume"
+                current_stage["action_index"] = None
+                current_stage["action_kind"] = None
+                current_stage["action_external_effect"] = False
+                self.journal.save(record)
+                start_index = index
+                action_offset = 0
+                resume_current = True
+            else:
+                # A prior action returned successfully; continue only if the next action's
+                # explicitly declared context is still visible on a fresh Android snapshot.
+                snapshot = self._resume_snapshot(record, "No pude revalidar el contexto de la siguiente acción.")
+                next_action = step["actions"][actions_completed]
+                required = next_action.get("requires", [])
+                try:
+                    _check_snapshot(
+                        snapshot,
+                        {"package": step["expect"]["package"], "contains": required, "not_contains": []},
+                        "reanudar: contexto de la siguiente acción",
+                    )
+                except EngineError:
+                    self._mark_attention(
+                        record,
+                        "resume_context_mismatch",
+                        "El contexto requerido para continuar ya no está visible. No repetiré las acciones anteriores.",
+                        {"run_id": run_id, "failed_stage": index + 1, "actions_completed": actions_completed},
+                    )
+                current_stage["phase"] = "preparing_resume"
+                current_stage["action_index"] = None
+                current_stage["action_kind"] = None
+                current_stage["action_external_effect"] = False
+                self.journal.save(record)
+                start_index = index
+                action_offset = actions_completed
+                resume_current = True
+        elif record.get("status") == "needs_attention":
+            raise EngineError(
+                "resume_needs_review",
+                "Este registro necesita revisión y no contiene un punto seguro para continuar.",
+                {"run_id": run_id, "resume_available": False},
+            )
+
+        return self._execute_validated_plan(
+            valid,
+            record,
+            start_index=start_index,
+            action_offset=action_offset,
+            resume_current=resume_current,
+            resumed=True,
+        )
+
+    def _resume_snapshot(self, record: dict[str, Any], message: str) -> Snapshot:
+        try:
+            return self.adapter.inspect()
+        except EngineError as exc:
+            self._mark_attention(
+                record,
+                "resume_inspect_failed",
+                message,
+                {"run_id": record["run_id"], "underlying_error": exc.code},
+            )
+        raise AssertionError("unreachable")
+
+    def _execute_validated_plan(
+        self,
+        valid: dict[str, Any],
+        record: dict[str, Any],
+        start_index: int,
+        action_offset: int,
+        resume_current: bool,
+        resumed: bool = False,
+    ) -> dict[str, Any]:
         started = time.monotonic()
-        completed = []
-        stage_timings = []
-        for index, step in enumerate(valid["steps"]):
+        stage_timings: list[dict[str, int]] = []
+        steps = valid["steps"]
+
+        for index in range(start_index, len(steps)):
+            step = steps[index]
+            continuing_current = resume_current and index == start_index
             stage_started = time.monotonic()
             prepare_started = time.monotonic()
-            if step["launch"]:
-                current = self.adapter.launch(step["launch"])
-            else:
+
+            if not continuing_current:
+                record["current_stage"] = {
+                    "stage": index + 1,
+                    "phase": "preparing",
+                    "actions_completed": 0,
+                    "actions_total": len(step["actions"]),
+                    "action_index": None,
+                    "action_kind": None,
+                    "action_external_effect": False,
+                }
+                record["status"] = "running"
+                record["last_error"] = None
+                self.journal.save(record)
+
+            try:
                 current = self.adapter.inspect()
-            prepare_ms = int((time.monotonic() - prepare_started) * 1000)
-            _check_snapshot(current, step["expect"], f"etapa {index + 1}, antes de actuar")
+                if continuing_current and action_offset > 0:
+                    required = step["actions"][action_offset].get("requires", [])
+                    _check_snapshot(
+                        current,
+                        {"package": step["expect"]["package"], "contains": required, "not_contains": []},
+                        f"etapa {index + 1}, contexto al reanudar",
+                    )
+                else:
+                    if not continuing_current and step["launch"]:
+                        current = self.adapter.launch(step["launch"])
+                    _check_snapshot(current, step["expect"], f"etapa {index + 1}, antes de actuar")
 
-            action_results = []
-            actions_started = time.monotonic()
-            for action in step["actions"]:
-                # Sensitive operations and explicitly guarded actions always get a fresh read.
-                if action.get("requires") or is_external_effect(action):
-                    current = self.adapter.inspect()
-                    live_assertion = {
-                        "package": step["expect"]["package"],
-                        "contains": action.get("requires", []),
-                        "not_contains": [],
-                    }
-                    _check_snapshot(current, live_assertion, f"etapa {index + 1}, antes de {action['kind']}")
-                action_results.append(self.adapter.perform(action))
-            actions_ms = int((time.monotonic() - actions_started) * 1000)
+                prepare_ms = int((time.monotonic() - prepare_started) * 1000)
+                current_state = record["current_stage"]
+                current_state["phase"] = "ready_for_action"
+                self.journal.save(record)
 
-            # A screen assertion is evidence about visible state, not automatically proof of a
-            # real-world outcome (for example, a matching draft is not proof a message was sent).
-            verify_started = time.monotonic()
-            after = self.adapter.inspect()
-            verify_wall_ms = int((time.monotonic() - verify_started) * 1000)
-            _check_snapshot(after, step["after"], f"etapa {index + 1}, resultado")
-            stage_elapsed = int((time.monotonic() - stage_started) * 1000)
-            stage_timings.append({
-                "stage": index + 1,
-                "prepare_ms": prepare_ms,
-                "actions_ms": actions_ms,
-                "verify_ms": verify_wall_ms,
-                "total_ms": stage_elapsed,
-            })
-            completed.append({
-                "stage": index + 1,
-                "package": after.package,
-                "actions": action_results,
-                "postconditions_matched": True,
-            })
+                action_results = []
+                actions_started = time.monotonic()
+                first_action = action_offset if continuing_current else 0
+                for action_index in range(first_action, len(step["actions"])):
+                    action = step["actions"][action_index]
+                    if action.get("requires") or is_external_effect(action):
+                        fresh = self.adapter.inspect()
+                        live_assertion = {
+                            "package": step["expect"]["package"],
+                            "contains": action.get("requires", []),
+                            "not_contains": [],
+                        }
+                        _check_snapshot(fresh, live_assertion, f"etapa {index + 1}, antes de {action['kind']}")
+
+                    current_state = record["current_stage"]
+                    current_state["phase"] = "action_in_progress"
+                    current_state["action_index"] = action_index
+                    current_state["action_kind"] = action["kind"]
+                    current_state["action_external_effect"] = is_external_effect(action)
+                    self.journal.save(record)
+
+                    action_results.append(self.adapter.perform(action))
+                    current_state["actions_completed"] = action_index + 1
+                    current_state["phase"] = "action_completed"
+                    current_state["action_index"] = None
+                    current_state["action_kind"] = None
+                    current_state["action_external_effect"] = False
+                    self.journal.save(record)
+
+                actions_ms = int((time.monotonic() - actions_started) * 1000)
+                current_state = record["current_stage"]
+                current_state["phase"] = "verifying"
+                self.journal.save(record)
+
+                verify_started = time.monotonic()
+                after = self.adapter.inspect()
+                verify_ms = int((time.monotonic() - verify_started) * 1000)
+                _check_snapshot(after, step["after"], f"etapa {index + 1}, resultado")
+
+                stage_elapsed = int((time.monotonic() - stage_started) * 1000)
+                stage_timings.append({
+                    "stage": index + 1,
+                    "prepare_ms": prepare_ms,
+                    "actions_ms": actions_ms,
+                    "verify_ms": verify_ms,
+                    "total_ms": stage_elapsed,
+                })
+                record["completed_stages"].append(
+                    self._stage_summary(index, after.package, len(step["actions"]))
+                )
+                record["next_stage"] = index + 2
+                record["current_stage"] = None
+                record["status"] = "running"
+                record["last_error"] = None
+                self.journal.save(record)
+                action_offset = 0
+                resume_current = False
+            except EngineError as exc:
+                current_state = record.get("current_stage") or {}
+                uncertain_action = current_state.get("phase") == "action_in_progress"
+                record["status"] = "needs_attention" if uncertain_action else "paused"
+                record["last_error"] = {"code": exc.code, "message": exc.message}
+                self.journal.save(record)
+                exc.details.update({
+                    "run_id": record["run_id"],
+                    "run_status": record["status"],
+                    "completed_stages": len(record.get("completed_stages", [])),
+                    "next_stage": record.get("next_stage", 1),
+                    "failed_stage": index + 1,
+                    "resume_available": True,
+                })
+                raise
 
         total_ms = int((time.monotonic() - started) * 1000)
+        record["status"] = "completed"
+        record["current_stage"] = None
+        record["next_stage"] = len(steps) + 1
+        record["last_error"] = None
+        self.journal.save(record)
+        completed = record["completed_stages"]
         return {
             "ok": True,
+            "run_id": record["run_id"],
+            "resumed": resumed,
             "dry_run": False,
             "name": valid["name"],
             "steps_completed": len(completed),
-            "actions_executed": valid["action_count"],
+            "actions_executed": sum(int(item.get("actions_completed", 0)) for item in completed),
             "elapsed_ms": total_ms,
             "postconditions_matched": True,
             "verification_scope": "foreground_package_and_visible_accessibility_text",
             "external_effect_outcome": "not_inferred",
             "timings": {"total_ms": total_ms, "stages": stage_timings},
             "results": completed,
+            "run_status": record["status"],
             "note": (
-                "Las condiciones visibles configuradas coincidieron. Esto no demuestra por sí solo "
-                "un resultado externo; por ejemplo, texto visible no prueba que un mensaje se enviara."
+                "Las condiciones visibles configuradas coincidieron. El registro conserva el progreso sin guardar el plan, "
+                "el texto de las acciones ni capturas. Esto no demuestra por sí solo un resultado externo."
             ),
         }
-
 
 def _load_json(path: str) -> Any:
     try:
@@ -510,9 +902,14 @@ def main(argv: list[str] | None = None) -> int:
     launch_p.add_argument("package")
     validate_p = sub.add_parser("validate", help="Valida un plan JSON sin tocar el teléfono.")
     validate_p.add_argument("plan", help="Ruta JSON o - para stdin.")
-    run_p = sub.add_parser("run", help="Valida y ejecuta un plan JSON por etapas.")
+    run_p = sub.add_parser("run", help="Valida y ejecuta un plan JSON por etapas con punto de control local.")
     run_p.add_argument("plan", help="Ruta JSON o - para stdin.")
     run_p.add_argument("--dry-run", action="store_true", help="Solo valida; no toca el teléfono.")
+    resume_p = sub.add_parser("resume", help="Revalida y continúa una ejecución registrada.")
+    resume_p.add_argument("run_id", help="ID devuelto por el comando run.")
+    resume_p.add_argument("plan", help="El mismo plan JSON usado al iniciar la tarea.")
+    status_p = sub.add_parser("status", help="Lee el estado local de una ejecución, sin tocar el teléfono.")
+    status_p.add_argument("run_id", help="ID devuelto por el comando run.")
     sub.add_parser("mcp", help="Inicia el servidor MCP local por stdio.")
     args = parser.parse_args(argv)
     engine = CostPhoneEngine()
@@ -526,6 +923,11 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "run":
             plan = _load_json(args.plan)
             _print(engine.run_plan(plan, dry_run=args.dry_run))
+        elif args.command == "resume":
+            plan = _load_json(args.plan)
+            _print(engine.resume_plan(plan, args.run_id))
+        elif args.command == "status":
+            _print(engine.get_run(args.run_id))
         elif args.command == "mcp":
             from mcp_server import serve
             return serve(engine)
