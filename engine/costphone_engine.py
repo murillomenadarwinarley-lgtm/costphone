@@ -758,17 +758,19 @@ class CostPhoneEngine:
                 self.journal.save(record)
 
             try:
-                current = self.adapter.inspect()
-                if continuing_current and action_offset > 0:
-                    required = step["actions"][action_offset].get("requires", [])
-                    _check_snapshot(
-                        current,
-                        {"package": step["expect"]["package"], "contains": required, "not_contains": []},
-                        f"etapa {index + 1}, contexto al reanudar",
-                    )
+                if continuing_current:
+                    current = self.adapter.inspect()
+                    if action_offset > 0:
+                        required = step["actions"][action_offset].get("requires", [])
+                        _check_snapshot(
+                            current,
+                            {"package": step["expect"]["package"], "contains": required, "not_contains": []},
+                            f"etapa {index + 1}, contexto al reanudar",
+                        )
+                    else:
+                        _check_snapshot(current, step["expect"], f"etapa {index + 1}, antes de actuar")
                 else:
-                    if not continuing_current and step["launch"]:
-                        current = self.adapter.launch(step["launch"])
+                    current = self.adapter.launch(step["launch"]) if step["launch"] else self.adapter.inspect()
                     _check_snapshot(current, step["expect"], f"etapa {index + 1}, antes de actuar")
 
                 prepare_ms = int((time.monotonic() - prepare_started) * 1000)
