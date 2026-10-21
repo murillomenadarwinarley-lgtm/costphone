@@ -61,6 +61,15 @@ Ejemplo de abrir la sección visible Network desde Ajustes:
 
 El motor no interpreta lenguaje natural: tú construyes el plan a partir de la petición y del estado observado. Si el texto accesible no permite diferenciar el destino, no adivines; pide una aclaración o detente.
 
+## Interrupciones, progreso y reanudación segura
+
+- Toda ejecución real de `phone_run_plan` devuelve un `run_id`. Conserva ese identificador mientras la tarea no esté terminada; el registro local es un punto de control entre llamadas y sesiones.
+- Si `phone_run_plan` devuelve un error con `run_id`, no vuelvas a ejecutar el plan completo. Primero llama a `phone_get_run` para leer qué etapas quedaron confirmadas.
+- Para continuar, llama a `phone_resume_plan` con el mismo `run_id` y exactamente el mismo plan. El motor vuelve a inspeccionar Android y solo continúa si la aplicación, el texto visible y el punto de control justifican la acción.
+- El registro no guarda el plan, los valores de las acciones, el contenido de mensajes ni capturas. El agente debe conservar el plan mientras necesite reanudarlo.
+- Si el resultado es `external_outcome_uncertain`, `needs_attention` o `resume_ambiguous`, no repitas la acción ni insistas con el mismo plan. Inspecciona el estado real, determina si la acción se realizó y crea una continuación diferente solo cuando la evidencia permita hacerlo sin duplicar efectos.
+- `phone_get_run` es de solo lectura y no consulta el teléfono. Un registro marcado `completed` confirma únicamente que coincidieron las condiciones visibles declaradas en el plan; nunca demuestra por sí solo que un mensaje se entregó o que un efecto externo quedó completado.
+- Reutiliza los puntos de control para recuperarte, no para saltarte precondiciones. Una referencia, texto o selector de pantalla nunca debe darse por válido tras un cambio de estado sin volver a comprobar el contexto.
 ## Clientes compatibles
 
 OpenCode es una forma de usar el motor, no la única. Cualquier cliente de IA que soporte un servidor MCP local por stdio puede configurarse con el ejecutable `~/bin/costphone-mcp`. También puede invocarse desde scripts o agentes locales mediante la CLI `costphone-engine`; estos deben construir planes JSON válidos y respetar los mismos controles. Una IA remota sin acceso al dispositivo, a Termux o a un puente MCP local no puede manejar el teléfono directamente solo con el nombre del repositorio.
