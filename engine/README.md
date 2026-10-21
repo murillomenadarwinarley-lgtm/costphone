@@ -112,6 +112,28 @@ phone_run_plan({ "plan": { ... }, "dry_run": true })
 
 A plan can be validated with phone_validate_plan before execution. Use phone_run_plan for the actual staged run.
 
+## Checkpoints and safe resume (0.2.0)
+
+Every live `phone_run_plan` execution returns a `run_id` and writes a local checkpoint after each meaningful transition. The checkpoint records completed stages, the next stage, action progress, and the last error. It deliberately does **not** save the plan, action values/message text, or screen snapshots. The default location is `~/.local/state/costphone-engine/runs/`; set `COSTPHONE_RUNS_DIR` to choose a different local directory. The engine attempts to restrict the directory to owner-only access and individual journal files to owner read/write.
+
+If a run stops and its error result includes `run_id`, do not rerun the entire plan. First read progress, then resume with the exact same plan:
+
+~~~text
+phone_get_run({ "run_id": "cp_..." })
+phone_resume_plan({ "run_id": "cp_...", "plan": { ...same plan... } })
+~~~
+
+The engine hashes the validated plan to reject a different plan for an existing run ID. Resume re-inspects Android and checks the visible context before continuing from a recorded, completed action. When an action may have taken effect but its result is uncertain, especially for Send/Delete/Pay/Publish and other external effects, the engine stops with `needs_attention` or `external_outcome_uncertain`; it never blindly repeats that action. The agent must review the visible state and create a new, state-appropriate plan if safe continuation cannot be proved.
+
+CLI equivalents:
+
+~~~sh
+costphone-engine status RUN_ID
+costphone-engine resume RUN_ID plan.json
+~~~
+
+A completed run is idempotent to resume: the engine reports it is already completed and does not execute actions again. The journal is local diagnostic metadata, not a backup of the plan and not proof of external effects.
+
 ## Safety and limits
 
 - The engine is not a language model. The calling agent translates the user request into a plan; the engine executes and verifies that plan.
