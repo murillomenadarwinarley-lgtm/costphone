@@ -318,6 +318,25 @@ class EngineExecutionTests(unittest.TestCase):
             self.assertEqual(len(second_adapter.actions), 1)
             self.assertEqual(second_adapter.actions[0]["value"], "Network")
 
+    def test_unexpected_runtime_error_preserves_run_id_for_recovery(self):
+        class BrokenAdapter(FakeAdapter):
+            def perform(self, action):
+                self.actions.append(action)
+                raise ValueError("simulated unexpected runtime failure")
+
+        with tempfile.TemporaryDirectory() as state_dir:
+            adapter = BrokenAdapter([snap("com.example.app", "Home", "Settings")])
+            engine = CostPhoneEngine(adapter=adapter, journal_dir=state_dir)
+            with self.assertRaises(EngineError) as ctx:
+                engine.run_plan(simple_plan())
+            self.assertEqual(ctx.exception.code, "execution_interrupted")
+            self.assertTrue(ctx.exception.details["run_id"].startswith("cp_"))
+            self.assertTrue(ctx.exception.details["resume_available"])
+            self.assertEqual(len(adapter.actions), 1)
+            saved = engine.get_run(ctx.exception.details["run_id"])["run"]
+            self.assertEqual(saved["status"], "paused")
+            self.assertEqual(saved["current_stage"]["phase"], "action_in_progress")
+
     def test_uncertain_external_action_is_not_retried_on_resume(self):
         plan = simple_plan()
         plan["steps"][0]["expect"]["contains"] = ["Home"]
