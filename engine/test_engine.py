@@ -337,7 +337,7 @@ class EngineExecutionTests(unittest.TestCase):
             with self.assertRaises(EngineError) as ctx:
                 first_engine.run_plan(plan)
             run_id = ctx.exception.details["run_id"]
-            self.assertEqual(ctx.exception.details["run_status"], "needs_attention")
+            self.assertEqual(ctx.exception.details["run_status"], "paused")
             self.assertEqual(len(first_adapter.actions), 1)
 
             resume_adapter = FakeAdapter([snap("com.example.app", "Message sent")])
@@ -347,6 +347,44 @@ class EngineExecutionTests(unittest.TestCase):
             self.assertEqual(resumed.exception.code, "external_outcome_uncertain")
             self.assertEqual(len(resume_adapter.actions), 0)
             self.assertEqual(resume_engine.get_run(run_id)["run"]["status"], "needs_attention")
+
+    def test_interrupted_after_external_action_during_verification_requires_review(self):
+        plan = simple_plan()
+        plan["steps"][0]["expect"]["contains"] = ["Home"]
+        plan["steps"][0]["actions"] = [{
+            "kind": "click_id",
+            "value": "com.example.app:id/send",
+            "requires": ["Target chat", "Message draft"],
+        }]
+        plan["steps"][0]["after"] = {"package": "com.example.app", "contains": ["Message sent"]}
+        with tempfile.TemporaryDirectory() as state_dir:
+            class VerifyInterruptedAdapter(FakeAdapter):
+                def inspect(self):
+                    self.inspect_calls += 1
+                    if self.inspect_calls == 3:
+                        raise EngineError("inspect_failed", "simulated verification interruption")
+                    if self.snapshots:
+                        self.last = self.snapshots.pop(0)
+                    return self.last
+
+            first_adapter = VerifyInterruptedAdapter([
+                snap("com.example.app", "Home", "Target chat", "Message draft"),
+                snap("com.example.app", "Target chat", "Message draft"),
+            ])
+            engine = CostPhoneEngine(adapter=first_adapter, allow_external_effects=True, journal_dir=state_dir)
+            with self.assertRaises(EngineError) as ctx:
+                engine.run_plan(plan)
+            run_id = ctx.exception.details["run_id"]
+            self.assertEqual(ctx.exception.details["run_status"], "paused")
+            self.assertEqual(len(first_adapter.actions), 1)
+
+            resumed_adapter = FakeAdapter([snap("com.example.app", "Message sent")])
+            resumed_engine = CostPhoneEngine(adapter=resumed_adapter, allow_external_effects=True, journal_dir=state_dir)
+            with self.assertRaises(EngineError) as resumed:
+                resumed_engine.resume_plan(plan, run_id)
+            self.assertEqual(resumed.exception.code, "external_outcome_uncertain")
+            self.assertEqual(len(resumed_adapter.actions), 0)
+            self.assertEqual(resumed_engine.get_run(run_id)["run"]["status"], "needs_attention")
 
     def test_resume_rejects_a_different_plan_for_existing_run_id(self):
         with tempfile.TemporaryDirectory() as state_dir:
