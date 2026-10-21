@@ -627,20 +627,6 @@ class CostPhoneEngine:
                         "La pantalla parece coincidir con el final, pero quedaban acciones en esta etapa. No omitiré pasos sin evidencia.",
                         {"run_id": run_id, "failed_stage": index + 1},
                     )
-                if current_stage.get("stage_has_external_effect") or any(
-                    is_external_effect(action) for action in step["actions"][:actions_completed]
-                ):
-                    self._mark_attention(
-                        record,
-                        "external_outcome_uncertain",
-                        "Las condiciones visibles coinciden, pero la etapa incluyó una acción con posible efecto externo antes de la interrupción. Comprueba el resultado antes de continuar.",
-                        {
-                            "run_id": run_id,
-                            "failed_stage": index + 1,
-                            "visible_postconditions_matched": True,
-                            "action_may_have_taken_effect": True,
-                        },
-                    )
                 record["completed_stages"].append(
                     self._stage_summary(index, snapshot.package, total_actions, reconciled=True)
                 )
@@ -660,6 +646,20 @@ class CostPhoneEngine:
                         "resume_result_mismatch",
                         "Las acciones registradas terminaron, pero la condición final no coincide. No repetiré la etapa automáticamente.",
                         {"run_id": run_id, "failed_stage": index + 1},
+                    )
+                if current_stage.get("stage_has_external_effect") or any(
+                    is_external_effect(action) for action in step["actions"][:actions_completed]
+                ):
+                    self._mark_attention(
+                        record,
+                        "external_outcome_uncertain",
+                        "Las condiciones visibles coinciden, pero la etapa incluyó una acción con posible efecto externo antes de la interrupción. Comprueba el resultado antes de continuar.",
+                        {
+                            "run_id": run_id,
+                            "failed_stage": index + 1,
+                            "visible_postconditions_matched": True,
+                            "action_may_have_taken_effect": True,
+                        },
                     )
                 record["completed_stages"].append(
                     self._stage_summary(index, snapshot.package, total_actions, reconciled=True)
