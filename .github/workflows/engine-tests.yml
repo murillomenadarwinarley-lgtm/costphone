@@ -94,7 +94,7 @@ jobs:
           assert len(replies) == 2, replies
           assert replies[0]["result"]["serverInfo"]["name"] == "costphone-engine"
           names = {tool["name"] for tool in replies[1]["result"]["tools"]}
-          assert names == {"phone_inspect", "phone_launch", "phone_validate_plan", "phone_run_plan"}, names
+          assert names == {"phone_inspect", "phone_launch", "phone_validate_plan", "phone_run_plan", "phone_resume_plan", "phone_get_run"}, names
           print("MCP handshake and tool listing passed.")
           PY
       - name: Native Windows MCP protocol smoke test

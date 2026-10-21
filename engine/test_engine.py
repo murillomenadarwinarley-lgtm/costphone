@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+
+# Keep the suite hermetic: live-task journals must not land in the developer's home directory.
+_TEST_RUNS = tempfile.TemporaryDirectory(prefix="costphone-engine-tests-")
+os.environ["COSTPHONE_RUNS_DIR"] = _TEST_RUNS.name
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -235,6 +241,185 @@ class EngineExecutionTests(unittest.TestCase):
             CostPhoneEngine(adapter=adapter).run_plan(simple_plan())
         self.assertEqual(len(adapter.actions), 1)
 
+
+    def test_failed_later_stage_reports_checkpoint_and_resumes_without_replaying_completed_stage(self):
+        plan = simple_plan()
+        plan["steps"].append({
+            "expect": {"package": "com.example.app", "contains": ["Settings"]},
+            "actions": [{"kind": "click_text", "value": "Network"}],
+            "after": {"package": "com.example.app", "contains": ["Network"]},
+        })
+        with tempfile.TemporaryDirectory() as state_dir:
+            first_adapter = FakeAdapter([
+                snap("com.example.app", "Home", "Settings"),
+                snap("com.example.app", "Settings", "Saved"),
+                snap("com.example.app", "Unexpected screen"),
+            ])
+            first_engine = CostPhoneEngine(adapter=first_adapter, journal_dir=state_dir)
+            with self.assertRaises(EngineError) as ctx:
+                first_engine.run_plan(plan)
+            run_id = ctx.exception.details["run_id"]
+            self.assertEqual(ctx.exception.details["completed_stages"], 1)
+            self.assertEqual(ctx.exception.details["run_status"], "paused")
+            self.assertEqual(len(first_adapter.actions), 1)
+
+            journal_text = (Path(state_dir) / f"{run_id}.json").read_text(encoding="utf-8")
+            self.assertNotIn("Settings", journal_text)  # Plan/action text is not persisted.
+            saved = first_engine.get_run(run_id)["run"]
+            self.assertEqual(saved["next_stage"], 2)
+            self.assertEqual(saved["completed_stages"][0]["stage"], 1)
+
+            second_adapter = FakeAdapter([
+                snap("com.example.app", "Settings"),
+                snap("com.example.app", "Settings"),
+                snap("com.example.app", "Network"),
+            ])
+            second_engine = CostPhoneEngine(adapter=second_adapter, journal_dir=state_dir)
+            result = second_engine.resume_plan(plan, run_id)
+            self.assertTrue(result["ok"])
+            self.assertTrue(result["resumed"])
+            self.assertEqual(result["steps_completed"], 2)
+            self.assertEqual(result["run_status"], "completed")
+            self.assertEqual(len(second_adapter.actions), 1)
+            self.assertEqual(second_adapter.actions[0]["value"], "Network")
+
+            repeated = second_engine.resume_plan(plan, run_id)
+            self.assertTrue(repeated["already_completed"])
+            self.assertEqual(len(second_adapter.actions), 1)
+
+    def test_resume_continues_after_completed_action_when_next_context_is_revalidated(self):
+        plan = simple_plan()
+        plan["steps"][0]["actions"] = [
+            {"kind": "click_text", "value": "Settings"},
+            {"kind": "click_text", "value": "Network", "requires": ["Settings"]},
+        ]
+        plan["steps"][0]["after"] = {"package": "com.example.app", "contains": ["Network"]}
+        with tempfile.TemporaryDirectory() as state_dir:
+            first_adapter = FakeAdapter([
+                snap("com.example.app", "Home"),
+                snap("com.example.app", "Unexpected"),
+            ])
+            first_engine = CostPhoneEngine(adapter=first_adapter, journal_dir=state_dir)
+            with self.assertRaises(EngineError) as ctx:
+                first_engine.run_plan(plan)
+            run_id = ctx.exception.details["run_id"]
+            self.assertEqual(len(first_adapter.actions), 1)
+
+            second_adapter = FakeAdapter([
+                snap("com.example.app", "Settings"),
+                snap("com.example.app", "Settings"),
+                snap("com.example.app", "Settings"),
+                snap("com.example.app", "Network"),
+            ])
+            result = CostPhoneEngine(adapter=second_adapter, journal_dir=state_dir).resume_plan(plan, run_id)
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["steps_completed"], 1)
+            self.assertEqual(result["actions_executed"], 2)
+            self.assertEqual(len(second_adapter.actions), 1)
+            self.assertEqual(second_adapter.actions[0]["value"], "Network")
+
+    def test_unexpected_runtime_error_preserves_run_id_for_recovery(self):
+        class BrokenAdapter(FakeAdapter):
+            def perform(self, action):
+                self.actions.append(action)
+                raise ValueError("simulated unexpected runtime failure")
+
+        with tempfile.TemporaryDirectory() as state_dir:
+            adapter = BrokenAdapter([snap("com.example.app", "Home", "Settings")])
+            engine = CostPhoneEngine(adapter=adapter, journal_dir=state_dir)
+            with self.assertRaises(EngineError) as ctx:
+                engine.run_plan(simple_plan())
+            self.assertEqual(ctx.exception.code, "execution_interrupted")
+            self.assertTrue(ctx.exception.details["run_id"].startswith("cp_"))
+            self.assertTrue(ctx.exception.details["resume_available"])
+            self.assertEqual(len(adapter.actions), 1)
+            saved = engine.get_run(ctx.exception.details["run_id"])["run"]
+            self.assertEqual(saved["status"], "paused")
+            self.assertEqual(saved["current_stage"]["phase"], "action_in_progress")
+
+    def test_uncertain_external_action_is_not_retried_on_resume(self):
+        plan = simple_plan()
+        plan["steps"][0]["expect"]["contains"] = ["Home"]
+        plan["steps"][0]["actions"] = [{
+            "kind": "click_id",
+            "value": "com.example.app:id/send",
+            "requires": ["Target chat", "Message draft"],
+        }]
+        plan["steps"][0]["after"] = {"package": "com.example.app", "contains": ["Message sent"]}
+        with tempfile.TemporaryDirectory() as state_dir:
+            first_adapter = FakeAdapter([
+                snap("com.example.app", "Home"),
+                snap("com.example.app", "Target chat", "Message draft"),
+            ])
+            first_adapter.fail_action = True
+            first_engine = CostPhoneEngine(adapter=first_adapter, allow_external_effects=True, journal_dir=state_dir)
+            with self.assertRaises(EngineError) as ctx:
+                first_engine.run_plan(plan)
+            run_id = ctx.exception.details["run_id"]
+            self.assertEqual(ctx.exception.details["run_status"], "paused")
+            self.assertEqual(len(first_adapter.actions), 1)
+
+            resume_adapter = FakeAdapter([snap("com.example.app", "Message sent")])
+            resume_engine = CostPhoneEngine(adapter=resume_adapter, allow_external_effects=True, journal_dir=state_dir)
+            with self.assertRaises(EngineError) as resumed:
+                resume_engine.resume_plan(plan, run_id)
+            self.assertEqual(resumed.exception.code, "external_outcome_uncertain")
+            self.assertEqual(len(resume_adapter.actions), 0)
+            self.assertEqual(resume_engine.get_run(run_id)["run"]["status"], "needs_attention")
+
+    def test_interrupted_after_external_action_during_verification_requires_review(self):
+        plan = simple_plan()
+        plan["steps"][0]["expect"]["contains"] = ["Home"]
+        plan["steps"][0]["actions"] = [{
+            "kind": "click_id",
+            "value": "com.example.app:id/send",
+            "requires": ["Target chat", "Message draft"],
+        }]
+        plan["steps"][0]["after"] = {"package": "com.example.app", "contains": ["Message sent"]}
+        with tempfile.TemporaryDirectory() as state_dir:
+            class VerifyInterruptedAdapter(FakeAdapter):
+                def inspect(self):
+                    self.inspect_calls += 1
+                    if self.inspect_calls == 3:
+                        raise EngineError("inspect_failed", "simulated verification interruption")
+                    if self.snapshots:
+                        self.last = self.snapshots.pop(0)
+                    return self.last
+
+            first_adapter = VerifyInterruptedAdapter([
+                snap("com.example.app", "Home", "Target chat", "Message draft"),
+                snap("com.example.app", "Target chat", "Message draft"),
+            ])
+            engine = CostPhoneEngine(adapter=first_adapter, allow_external_effects=True, journal_dir=state_dir)
+            with self.assertRaises(EngineError) as ctx:
+                engine.run_plan(plan)
+            run_id = ctx.exception.details["run_id"]
+            self.assertEqual(ctx.exception.details["run_status"], "paused")
+            self.assertEqual(len(first_adapter.actions), 1)
+
+            resumed_adapter = FakeAdapter([snap("com.example.app", "Message sent")])
+            resumed_engine = CostPhoneEngine(adapter=resumed_adapter, allow_external_effects=True, journal_dir=state_dir)
+            with self.assertRaises(EngineError) as resumed:
+                resumed_engine.resume_plan(plan, run_id)
+            self.assertEqual(resumed.exception.code, "external_outcome_uncertain")
+            self.assertEqual(len(resumed_adapter.actions), 0)
+            self.assertEqual(resumed_engine.get_run(run_id)["run"]["status"], "needs_attention")
+
+    def test_resume_rejects_a_different_plan_for_existing_run_id(self):
+        with tempfile.TemporaryDirectory() as state_dir:
+            adapter = FakeAdapter([
+                snap("com.example.app", "Home", "Settings"),
+                snap("com.example.app", "Settings"),
+            ])
+            engine = CostPhoneEngine(adapter=adapter, journal_dir=state_dir)
+            result = engine.run_plan(simple_plan())
+            changed = simple_plan()
+            changed["steps"][0]["actions"][0]["value"] = "Other control"
+            with self.assertRaises(EngineError) as ctx:
+                engine.resume_plan(changed, result["run_id"])
+            self.assertEqual(ctx.exception.code, "run_plan_mismatch")
+            self.assertEqual(len(adapter.actions), 1)
+
     def test_launch_stage_verifies_package(self):
         plan = {
             "version": 1,
@@ -263,7 +448,49 @@ class MCPProtocolTests(unittest.TestCase):
         self.assertEqual(initialized["result"]["serverInfo"]["name"], "costphone-engine")
         tools = dispatch("tools/list", {}, CostPhoneEngine(adapter=FakeAdapter([])))
         names = {item["name"] for item in tools["result"]["tools"]}
-        self.assertEqual(names, {"phone_inspect", "phone_launch", "phone_validate_plan", "phone_run_plan"})
+        self.assertEqual(names, {"phone_inspect", "phone_launch", "phone_validate_plan", "phone_run_plan", "phone_resume_plan", "phone_get_run"})
+
+    def test_phone_get_run_is_read_only_and_returns_progress(self):
+        with tempfile.TemporaryDirectory() as state_dir:
+            adapter = FakeAdapter([
+                snap("com.example.app", "Home", "Settings"),
+                snap("com.example.app", "Settings", "Saved"),
+            ])
+            engine = CostPhoneEngine(adapter=adapter, journal_dir=state_dir)
+            finished = engine.run_plan(simple_plan())
+            inspect_calls = adapter.inspect_calls
+            reply = dispatch(
+                "tools/call",
+                {"name": "phone_get_run", "arguments": {"run_id": finished["run_id"]}},
+                engine,
+            )
+            payload = json.loads(reply["result"]["content"][0]["text"])
+            self.assertTrue(payload["ok"])
+            self.assertEqual(payload["run"]["status"], "completed")
+            self.assertEqual(payload["run"]["next_stage"], 2)
+            self.assertEqual(adapter.inspect_calls, inspect_calls)
+            self.assertEqual(len(adapter.actions), 1)
+
+    def test_phone_resume_plan_tool_does_not_repeat_completed_run(self):
+        with tempfile.TemporaryDirectory() as state_dir:
+            adapter = FakeAdapter([
+                snap("com.example.app", "Home", "Settings"),
+                snap("com.example.app", "Settings", "Saved"),
+            ])
+            engine = CostPhoneEngine(adapter=adapter, journal_dir=state_dir)
+            result = engine.run_plan(simple_plan())
+            reply = dispatch(
+                "tools/call",
+                {
+                    "name": "phone_resume_plan",
+                    "arguments": {"run_id": result["run_id"], "plan": simple_plan()},
+                },
+                engine,
+            )
+            payload = json.loads(reply["result"]["content"][0]["text"])
+            self.assertTrue(payload["ok"])
+            self.assertTrue(payload["already_completed"])
+            self.assertEqual(len(adapter.actions), 1)
 
     def test_phone_run_plan_accepts_dry_run_without_phone_io(self):
         adapter = FakeAdapter([])

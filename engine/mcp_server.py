@@ -80,6 +80,38 @@ TOOLS: list[dict[str, Any]] = [
             "additionalProperties": False,
         },
     },
+    {
+        "name": "phone_resume_plan",
+        "description": (
+            "Resume a prior phone_run_plan using the same plan and its run_id. The engine reads its private local checkpoint, "
+            "rechecks current Android screen state, and continues only where the journal and visible context make it safe. "
+            "It never blindly retries an action whose outcome is uncertain."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "run_id": {"type": "string", "description": "run_id returned by the original phone_run_plan call."},
+                "plan": {"type": "object", "description": "The exact same Version 1 plan used for the original run."},
+            },
+            "required": ["run_id", "plan"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "name": "phone_get_run",
+        "description": (
+            "Read the local checkpoint and progress of a CostPhone Engine task. Read-only: it does not inspect or touch Android. "
+            "The journal stores progress metadata but not the plan, action text or screen snapshots."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "run_id": {"type": "string", "description": "run_id returned by phone_run_plan."}
+            },
+            "required": ["run_id"],
+            "additionalProperties": False,
+        },
+    },
 ]
 
 
@@ -113,7 +145,9 @@ def dispatch(method: str, params: dict[str, Any] | None, engine: CostPhoneEngine
                 "instructions": (
                     "Use phone_inspect to observe state, phone_launch to open and verify an app, "
                     "and phone_run_plan for a short plan with package and visible-text assertions. "
-                    "Never retry a failed action blindly."
+                    "Every live plan receives a run_id and stores a private progress checkpoint. If execution is interrupted, "
+                    "call phone_get_run, then phone_resume_plan with the same run_id and exactly the same plan. "
+                    "Never retry an uncertain action blindly or claim external effects without separate evidence."
                 ),
             },
         }
@@ -136,6 +170,10 @@ def dispatch(method: str, params: dict[str, Any] | None, engine: CostPhoneEngine
                 if not isinstance(dry_run, bool):
                     raise EngineError("invalid_argument", "dry_run debe ser un booleano.")
                 result = engine.run_plan(args.get("plan"), dry_run=dry_run)
+            elif name == "phone_resume_plan":
+                result = engine.resume_plan(args.get("plan"), args.get("run_id"))
+            elif name == "phone_get_run":
+                result = engine.get_run(args.get("run_id"))
             else:
                 return {"jsonrpc": "2.0", "error": {"code": -32602, "message": "Herramienta desconocida."}}
             return {"jsonrpc": "2.0", "result": _tool_result(result)}
