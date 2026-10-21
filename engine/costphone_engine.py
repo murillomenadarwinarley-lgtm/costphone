@@ -565,6 +565,12 @@ class CostPhoneEngine:
                 "El plan no coincide con el que creó este run_id. No ejecutaré un plan distinto sobre el registro.",
                 {"run_id": run_id, "resume_available": False},
             )
+        if record.get("status") == "needs_attention":
+            raise EngineError(
+                "resume_needs_review",
+                "Esta tarea ya fue marcada para revisión humana. Inspecciona Android y crea una continuación nueva solo tras confirmar su estado.",
+                {"run_id": run_id, "resume_available": False},
+            )
         if record.get("status") == "completed":
             return {
                 "ok": True,
@@ -602,7 +608,7 @@ class CostPhoneEngine:
                         "Una acción pudo haber surtido efecto, pero la condición final no coincide. No repetiré la acción.",
                         {"run_id": run_id, "failed_stage": index + 1, "action_may_have_taken_effect": True},
                     )
-                if current_stage.get("action_external_effect"):
+                if current_stage.get("action_external_effect") or current_stage.get("stage_has_external_effect"):
                     self._mark_attention(
                         record,
                         "external_outcome_uncertain",
@@ -620,6 +626,20 @@ class CostPhoneEngine:
                         "resume_ambiguous",
                         "La pantalla parece coincidir con el final, pero quedaban acciones en esta etapa. No omitiré pasos sin evidencia.",
                         {"run_id": run_id, "failed_stage": index + 1},
+                    )
+                if current_stage.get("stage_has_external_effect") or any(
+                    is_external_effect(action) for action in step["actions"][:actions_completed]
+                ):
+                    self._mark_attention(
+                        record,
+                        "external_outcome_uncertain",
+                        "Las condiciones visibles coinciden, pero la etapa incluyó una acción con posible efecto externo antes de la interrupción. Comprueba el resultado antes de continuar.",
+                        {
+                            "run_id": run_id,
+                            "failed_stage": index + 1,
+                            "visible_postconditions_matched": True,
+                            "action_may_have_taken_effect": True,
+                        },
                     )
                 record["completed_stages"].append(
                     self._stage_summary(index, snapshot.package, total_actions, reconciled=True)
@@ -752,6 +772,7 @@ class CostPhoneEngine:
                     "action_index": None,
                     "action_kind": None,
                     "action_external_effect": False,
+                    "stage_has_external_effect": False,
                 }
                 record["status"] = "running"
                 record["last_error"] = None
@@ -797,6 +818,9 @@ class CostPhoneEngine:
                     current_state["action_index"] = action_index
                     current_state["action_kind"] = action["kind"]
                     current_state["action_external_effect"] = is_external_effect(action)
+                    current_state["stage_has_external_effect"] = bool(
+                        current_state.get("stage_has_external_effect")
+                    ) or is_external_effect(action)
                     self.journal.save(record)
 
                     action_results.append(self.adapter.perform(action))
@@ -838,7 +862,9 @@ class CostPhoneEngine:
             except EngineError as exc:
                 current_state = record.get("current_stage") or {}
                 uncertain_action = current_state.get("phase") == "action_in_progress"
-                record["status"] = "needs_attention" if uncertain_action else "paused"
+                # Leave uncertain actions paused for one explicit reconciliation attempt.
+                # resume_plan will inspect the phone once and promote unresolved cases to needs_attention.
+                record["status"] = "paused"
                 record["last_error"] = {"code": exc.code, "message": exc.message}
                 self.journal.save(record)
                 exc.details.update({
