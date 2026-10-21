@@ -7,6 +7,12 @@ description: "Control del teléfono Android desde Termux con CostPhone/amctl. En
 
 **Objetivo:** terminar la tarea, no narrar ni diagnosticar. Usa el mínimo de llamadas al terminal. No generes capturas ni vuelques árboles por rutina. Carga esta skill antes del primer comando de teléfono; no empieces comprobando la pantalla de Termux.
 
+## Tareas de varios pasos: usar puntos de control del motor si están disponibles
+
+- Antes de una tarea Android con varias pantallas o una secuencia que podría quedar interrumpida, comprueba si el cliente expone `phone_run_plan`, `phone_get_run` y `phone_resume_plan`. Si están disponibles, prefiere el motor para esa tarea: crea un plan por etapas con precondiciones y resultado visible esperado.
+- Conserva el `run_id` de `phone_run_plan`. Si la ejecución falla, lee `phone_get_run` y usa `phone_resume_plan` con el mismo ID y exactamente el mismo plan; no repitas todo el lote de `amctl`.
+- Si aparece `external_outcome_uncertain`, `needs_attention` o `resume_ambiguous`, no repitas envíos, eliminaciones, pagos, publicaciones ni otra acción sensible. Verifica el estado actual y decide cómo continuar desde evidencia nueva.
+- Para una única acción conocida y de bajo riesgo, conserva la ruta rápida de `amctl` descrita abajo. No ejecutes simultáneamente un mismo flujo mediante el motor y mediante `amctl`.
 ## Preparación rápida de la ruta Shizuku
 
 Al comenzar una sesión nueva del agente, si `rish` está instalado y aún no hay sesión viva, intenta una sola vez:
