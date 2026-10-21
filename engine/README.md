@@ -5,7 +5,7 @@ CostPhone Engine is an **additive, opt-in orchestration layer** above the existi
 ## What this first version includes
 
 - Local CLI: inspect, launch-and-verify, validate a JSON plan, execute a staged plan, or start MCP.
-- MCP stdio server for agents such as OpenCode: phone_inspect, phone_launch, phone_validate_plan, phone_run_plan. The MCP `phone_run_plan` tool accepts `dry_run: true` to preview without phone I/O.
+- MCP stdio server for agents such as OpenCode: `phone_inspect`, `phone_launch`, `phone_validate_plan`, `phone_run_plan`, `phone_get_run` and `phone_resume_plan`. Live plans create local progress checkpoints; interrupted runs can be resumed only after fresh state checks.
 - Each plan stage checks the foreground package and visible text before it acts, then checks the expected screen afterwards. If a stage has multiple actions, every action after the first must include its own requires text so the engine re-reads the screen before continuing.
 - Sensitive button actions (for example Send, Delete, Pay, Publish, Checkout and Enter) are blocked by default. There is no automatic action retry.
 - No Python packages, APK rebuild, or modification of existing amctl commands is required.
